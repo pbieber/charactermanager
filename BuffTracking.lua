@@ -282,6 +282,7 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
             end)
 
             table.insert(buffFrames, characterFrame)
+            table.insert(buffFrames, debugButton)  -- Add debug button to buffFrames
             yOffset = yOffset - 24  -- Reduced spacing between character entries
 
             -- If not collapsed, show buff details
@@ -327,54 +328,59 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
                         buffIcon:SetSize(14, 14)  -- Small icon
                         buffIcon:SetPoint("LEFT", 0, 0)
                         
-                        -- Set buff icon texture
-                        if buffInfo.icon then
-                            buffIcon:SetTexture(buffInfo.icon)
-                        else
-                            -- Try to get icon from game data
-                            local _, _, icon = GetSpellInfo(buffInfo.spellId or 0)
-                            if icon then
-                                buffIcon:SetTexture(icon)
-                            else
-                                -- Fallback icon
-                                buffIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-                            end
-                        end
-                        
-                        -- Create buff text with status
-                        local statusText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                        statusText:SetPoint("LEFT", buffIcon, "RIGHT", 5, 0)
-                        
-                        local textColor = {r=1, g=0.5, b=0.5} -- Default: reddish (not active)
-                        local statusString = "Missing"
-                        
-                        if isActive then
-                            textColor = {r=0.5, g=1, b=0.5} -- Green for active
-                            statusString = "Active"
-                        elseif isInBoon then
-                            textColor = {r=0.5, g=0.8, b=1} -- Blue for in chronoboon
-                            statusString = "In Chronoboon"
-                        end
-                        
-                        statusText:SetText(buffName .. ": " .. statusString)
-                        statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
-                        
-                        -- Add to detail frame height
-                        detailYOffset = detailYOffset - 16
-                        detailHeight = detailHeight + 16
-                        
-                        table.insert(buffFrames, buffRow)
+                -- Set buff icon texture
+                local iconPath = nil
+                if buffInfo.icon then
+                    iconPath = buffInfo.icon
+                    buffIcon:SetTexture(iconPath)
+                else
+                    -- Try to get icon from game data
+                    local spellId = buffInfo.spellIds and buffInfo.spellIds[1] or 0
+                    local _, _, icon = GetSpellInfo(spellId)
+                    if icon then
+                        iconPath = icon
+                        buffIcon:SetTexture(icon)
+                    else
+                        -- Fallback icon
+                        iconPath = "Interface\\Icons\\INV_Misc_QuestionMark"
+                        buffIcon:SetTexture(iconPath)
                     end
                 end
                 
-                -- Set final height of detail frame
-                buffDetailFrame:SetHeight(detailHeight)
-                table.insert(buffFrames, buffDetailFrame)
+                -- Create buff text with status
+                local statusText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                statusText:SetPoint("LEFT", buffIcon, "RIGHT", 5, 0)
                 
-                -- Adjust yOffset for next character
-                yOffset = yOffset - detailHeight - 5
+                local textColor = {r=1, g=0.5, b=0.5} -- Default: reddish (not active)
+                local statusString = "Missing"
+                
+                if isActive then
+                    textColor = {r=0.5, g=1, b=0.5} -- Green for active
+                    statusString = "Active"
+                elseif isInBoon then
+                    textColor = {r=0.5, g=0.8, b=1} -- Blue for in chronoboon
+                    statusString = "In Chronoboon"
+                end
+                
+                statusText:SetText(buffName .. ": " .. statusString)
+                statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
+                
+                -- Add to detail frame height
+                detailYOffset = detailYOffset - 16
+                detailHeight = detailHeight + 16
+                
+                table.insert(buffFrames, buffRow)
             end
         end
+        
+        -- Set final height of detail frame
+        buffDetailFrame:SetHeight(detailHeight)
+        table.insert(buffFrames, buffDetailFrame)
+        
+        -- Adjust yOffset for next character
+        yOffset = yOffset - detailHeight - 5
+    end
+end
     end
 end
 
@@ -433,9 +439,6 @@ function CharacterManager_BuffTracking.TrackCurrentPlayerBuffs(MyAddonDB)
     
     return MyAddonDB
 end
-
-
-
 
 -- Initialize buff tracking
 function CharacterManager_BuffTracking.Initialize(trackedBuffsList, chronoboonAuraId)

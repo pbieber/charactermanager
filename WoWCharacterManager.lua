@@ -509,7 +509,7 @@ for i, tabName in ipairs(tabs) do
 
     -- Set initial tab state
     if i == selectedTab then
-        tab.bg:SetColorTexture(0.8, 0.1, 0.1, 1)  -- Selected blue
+        tab.bg:SetColorTexture(0.8, 0.1, 0.1, 1)  -- 
         tab.text:SetTextColor(1, 1, 1) -- White text
         tabFrames[i]:Show()
     else
