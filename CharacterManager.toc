@@ -1,0 +1,17 @@
+## Interface: 11501
+## Version: 0.3.0
+## Title: Character Manager
+## Notes: WoWCharacterManager
+## Author: petetv1
+## SavedVariables: MyAddonDB
+
+# Core files
+Constants.lua
+
+#Functions
+RaidLockouts.lua
+ProfessionCooldowns.lua
+BuffTracking.lua
+
+#Main File
+WoWCharacterManager.lua
