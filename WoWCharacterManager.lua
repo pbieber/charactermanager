@@ -157,13 +157,18 @@ local function OnSpellCast(self, event, unit, _, spellID)
     if not spellName then return end
     
     local needsSave = false
+    local fullName = UnitName("player") .. " - " .. GetRealmName()
     
     -- Check if it's a tracked profession cooldown
     local trackedSpellIDs = GetTrackedSpellIDs()
     for _, trackedSpellID in ipairs(trackedSpellIDs) do
         if spellID == trackedSpellID then
             print("Tracked profession spell cast detected:", spellName, "(ID:", spellID, ")") -- Debug output
-            SaveProfessionCooldowns()
+            
+            -- Use the new function to update cooldown data
+            characters = CharacterManager_ProfessionCooldowns.OnSpellCast(characters, fullName, spellID)
+            
+            -- Update the UI
             UpdateProfessionCooldowns()
             needsSave = true
             break
@@ -188,6 +193,7 @@ local function OnSpellCast(self, event, unit, _, spellID)
     -- Save character data if needed
     if needsSave then
         SaveCharacter()
+        MyAddonDB = characters -- Ensure global DB is updated
     end
 end
 
@@ -410,7 +416,7 @@ local tabHeight = 24
 local tabSpacing = -5  -- Adjust spacing to fit nicely
 
 -- Create Tabs
-local tabs = {"To-dos", "Professions", "Raids", "Buffs", "Settings"}
+local tabs = {"To-dos", "Professions", "Raids", "Buffs", "Consumes", "Settings"}
 local selectedTab = 2
 
 -- Ensure tabFrames is defined

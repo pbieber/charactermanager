@@ -61,6 +61,53 @@ local function CheckProfessionsAndSpells(characters, fullName)
         end
     end
 
+    -- Check for any active cooldowns that might not be properly tracked
+    local currentCharacter = fullName
+    if characters[currentCharacter] and characters[currentCharacter].professions then
+        for profession, spells in pairs(SpellsToTrack) do
+            if characters[currentCharacter].professions[profession] then
+                for _, spell in ipairs(spells) do
+                    local start, duration = GetSpellCooldown(spell.id)
+                    if start > 0 and duration > 0 then
+                        -- There's an active cooldown from the API
+                        local currentTime = GetTime()
+                        local serverTime = GetServerTime()
+                        local remainingTime = start + duration - currentTime
+                        print("Cooldown detected for" .. spell.name)
+                        
+                        -- Initialize professionCooldowns if it doesn't exist
+                        if not characters[currentCharacter].professionCooldowns then
+                            characters[currentCharacter].professionCooldowns = {}
+                        end
+                        
+                        -- Check if we need to update the stored cooldown
+                        local needsUpdate = true
+                        if characters[currentCharacter].professionCooldowns[spell.name] then
+                            local storedData = characters[currentCharacter].professionCooldowns[spell.name]
+                            local storedRemaining = (storedData.remainingTime or 0) - (serverTime - (storedData.lastUpdated or 0))
+                            
+                            -- If the difference is small, we don't need to update
+                            if math.abs(storedRemaining - remainingTime) < 60 then
+                                needsUpdate = false
+                            end
+                        end
+                        
+                        -- Update the cooldown if needed
+                        if needsUpdate then
+                            print("Updating cooldown for " .. spell.name .. " - API shows active cooldown")
+                            characters[currentCharacter].professionCooldowns[spell.name] = {
+                                startTime = start,
+                                duration = duration,
+                                remainingTime = remainingTime,
+                                lastUpdated = serverTime
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+
     return characters
 end
 
@@ -166,17 +213,87 @@ function CharacterManager_ProfessionCooldowns.CreateCooldownBars(parentFrame)
     return cooldownBars, debugText
 end
 
--- Update the UpdateProfessionCooldowns function to handle shared cooldowns
 function CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldownBars, characters, debugText)
     local currentTime = GetServerTime()
     local visibleBars = 0
     
-    -- Debug output
-    print("UpdateProfessionCooldowns called with " .. #cooldownBars .. " bars")
+    -- Get current character name
+    local currentCharacter = UnitName("player") .. " - " .. GetRealmName()
+    print("DEBUG: Current character is", currentCharacter)
     
     -- First, hide all bars
     for i = 1, #cooldownBars do
         cooldownBars[i]:Hide()
+    end
+    
+    if not characters then
+        print("DEBUG: No characters data available")
+        if debugText then
+            debugText:SetText("No character data available")
+            debugText:Show()
+        end
+        return 0
+    end
+    
+    -- Check if current character exists in database
+    if not characters[currentCharacter] then
+        print("DEBUG: Current character not found in database")
+        if debugText then
+            debugText:SetText("Character not found in database")
+            debugText:Show()
+        end
+        return 0
+    end
+    
+    -- Check if current character has profession cooldowns
+    if not characters[currentCharacter].professionCooldowns then
+        print("DEBUG: No profession cooldowns for current character")
+        if debugText then
+            debugText:SetText("No profession cooldowns for this character")
+            debugText:Show()
+        end
+        return 0
+    end
+    
+    -- Debug output current character's cooldowns from database
+    print("DEBUG: ===== STORED COOLDOWNS FOR", currentCharacter, "=====")
+    for spellName, cooldownData in pairs(characters[currentCharacter].professionCooldowns) do
+        local serverTime = GetServerTime()
+        local timePassed = 0
+        local calculatedRemaining = 0
+        
+        if cooldownData.lastUpdated then
+            timePassed = serverTime - cooldownData.lastUpdated
+            calculatedRemaining = (cooldownData.remainingTime or 0) - timePassed
+            if calculatedRemaining < 0 then calculatedRemaining = 0 end
+        end
+        
+        print(string.format("DEBUG: Spell: %s, Stored remaining: %d, Last updated: %d, Time passed: %d, Calculated remaining: %d", 
+            spellName, 
+            cooldownData.remainingTime or 0,
+            cooldownData.lastUpdated or 0,
+            timePassed,
+            calculatedRemaining
+        ))
+    end
+    
+    -- Check actual cooldowns from the game API for comparison
+    print("DEBUG: ===== CURRENT COOLDOWNS FROM API =====")
+    local trackedSpellIDs = CharacterManager_ProfessionCooldowns.GetTrackedSpellIDs()
+    for _, spellID in ipairs(trackedSpellIDs) do
+        local spellName = GetSpellInfo(spellID)
+        local start, duration = GetSpellCooldown(spellID)
+        
+        if spellName then
+            if start > 0 then
+                local remaining = (start + duration) - GetTime()
+                print(string.format("DEBUG: API - Spell: %s (ID: %d), Start: %.2f, Duration: %.2f, Remaining: %.2f", 
+                    spellName, spellID, start, duration, remaining))
+            else
+                print(string.format("DEBUG: API - Spell: %s (ID: %d) is available (no cooldown)", 
+                    spellName, spellID))
+            end
+        end
     end
     
     -- Check if we have any characters with cooldowns
@@ -202,6 +319,13 @@ function CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldown
                     -- Calculate remaining time
                     local elapsedTime = currentTime - lastUpdated
                     local remainingTime = (cooldownData.remainingTime or 0) - elapsedTime
+                    
+                    -- Add debug for ready cooldowns
+                    if remainingTime <= 0 then
+                        print(fullName .. " - " .. spellName .. " is READY! remainingTime: " .. remainingTime)
+                        print("  lastUpdated: " .. lastUpdated .. ", currentTime: " .. currentTime)
+                        print("  elapsedTime: " .. elapsedTime .. ", original remainingTime: " .. (cooldownData.remainingTime or 0))
+                    end
                     
                     -- Handle transmute spells specially
                     if string.match(spellName, "Transmute:") then
@@ -229,6 +353,12 @@ function CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldown
                     local displayName = "Transmute: Other"
                     if transmuteDuration >= 172800 or transmuteName == "Transmute: Arcanite" then
                         displayName = "Transmute: Arcanite"
+                    end
+                    
+                    -- Add debug for ready transmutes
+                    if longestTransmuteRemaining <= 0 then
+                        print(fullName .. " - " .. displayName .. " is READY! remainingTime: " .. longestTransmuteRemaining)
+                        print("  Based on original spell: " .. transmuteName .. " with duration: " .. transmuteDuration)
                     end
                     
                     local cooldownKey = fullName .. "_Transmute"
@@ -266,6 +396,7 @@ function CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldown
             -- If both are on cooldown, sort by remaining time (shorter first)
             return a.remainingTime < b.remainingTime
         end)
+        
         
         -- Display the sorted cooldowns
         for _, cooldownInfo in ipairs(sortedCooldowns) do
