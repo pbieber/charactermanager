@@ -66,9 +66,12 @@ end
 local function InitializeAddon()
     -- Initialize buff tracking module
     local buffTrackingFrame = CharacterManager_BuffTracking.Initialize(CharacterManager_TrackedBuffs, CharacterManager_CHRONOBOON_AURA_ID)
-    
-    -- Rest of your initialization code...
-    -- ...
+
+
+end
+
+local function InitializeSettings()
+    WoWCharacterManagerSettings = CharacterManager_Settings.InitializeSettings()
 end
 
 InitializeAddon()
@@ -249,58 +252,8 @@ local function ShowBuffSettingsDropdown(characterName, anchorFrame)
 end
 
 -- Function to create the settings tab content
-local function CreateSettingsTabContent()
-    local settingsFrame = tabFrames[5]
-    if not settingsFrame then return end
-    
-    -- Title
-    local title = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 20, -20)
-    title:SetText("Character Manager Settings")
-    
-    -- Character dropdown
-    local characterDropdown = CreateFrame("Frame", "CharacterManagerSettingsDropdown", settingsFrame, "UIDropDownMenuTemplate")
-    characterDropdown:SetPoint("TOPLEFT", title, "BOTTOMLEFT", -15, -20)
-    
-    local selectedCharacter = nil
-    
-    local function UpdateCharacterDropdown()
-        local characters = {}
-        for fullName, _ in pairs(MyAddonDB) do
-            table.insert(characters, fullName)
-        end
-        table.sort(characters)
-        
-        UIDropDownMenu_SetWidth(characterDropdown, 200)
-        UIDropDownMenu_SetText(characterDropdown, selectedCharacter or "Select Character")
-        
-        UIDropDownMenu_Initialize(characterDropdown, function(self, level)
-            local info = UIDropDownMenu_CreateInfo()
-            
-            for _, fullName in ipairs(characters) do
-                info.text = fullName
-                info.func = function()
-                    selectedCharacter = fullName
-                    UIDropDownMenu_SetText(characterDropdown, fullName)
-                    UpdateBuffSettings(fullName)
-                end
-                info.checked = (fullName == selectedCharacter)
-                UIDropDownMenu_AddButton(info, level)
-            end
-        end)
-    end
-    
-    -- Buff settings container
-    local buffSettingsContainer = CreateFrame("Frame", nil, settingsFrame)
-    buffSettingsContainer:SetPoint("TOPLEFT", characterDropdown, "BOTTOMLEFT", 15, -20)
-    buffSettingsContainer:SetSize(350, 300)
-    
-    local buffCheckboxes = {}
-    
-
-    
-    -- Initialize dropdown
-    UpdateCharacterDropdown()
+local function CreateSettingsTab()
+    return CharacterManager_Settings.CreateSettingsUI(tabFrames[5])
 end
 
 local function SaveCharacter()
@@ -358,15 +311,15 @@ MyAddon:SetScript("OnEvent", function(self, event, ...)
         print("WoWCharacter Manager Loaded")
         
         -- Initialize settings if they don't exist
-        if not MyAddonSettings then
-            MyAddonSettings = {
+        if not WoWCharacterManagerSettings then
+            WoWCharacterManagerSettings = {
                 characters = {},
                 defaultBuffs = {} -- Store default buff settings for new characters
             }
             
             -- Set default buff settings (all buffs enabled by default)
             for _, buffInfo in ipairs(trackedBuffs) do
-                MyAddonSettings.defaultBuffs[buffInfo.name] = true
+                WoWCharacterManagerSettings.defaultBuffs[buffInfo.name] = true
             end
         end
         
@@ -375,6 +328,7 @@ MyAddon:SetScript("OnEvent", function(self, event, ...)
         UpdateProfessionCooldowns()
         UpdateAllRaidStatuses()
         CreateCooldownBars()
+        InitializeSettings()
         
         -- Create settings tab content
         CreateSettingsTabContent()
@@ -501,7 +455,7 @@ for i, tabName in ipairs(tabs) do
                 end
             end
         elseif i == 4 then  -- Buffs tab
-            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, MyAddonSettings)
+            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
         end
     end)
 
@@ -761,7 +715,7 @@ updateTimer:SetScript("OnUpdate", function(self, elapsed)
                 end
             end
         elseif selectedTab == 4 then
-            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, MyAddonSettings)
+            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
         end
         self.elapsed = 0
     end
@@ -769,6 +723,7 @@ end)
 
 
 -- Minimap Button
+-- Update the minimap button code to use settings:
 local minimapButton = CreateFrame("Button", "MyAddonMinimapButton", Minimap)
 minimapButton:SetSize(32, 32)
 minimapButton:SetFrameStrata("MEDIUM")
@@ -782,5 +737,8 @@ minimapButton:SetScript("OnClick", function()
         MyAddon:Show()
     end
 end)
+
+-- Apply settings to minimap button
+CharacterManager_Settings.UpdateMinimapButton()
 
 MyAddon:Show()
