@@ -1,187 +1,159 @@
 -- Settings.lua
+-- Handles all settings functionality for Character Manager
+
 CharacterManager_Settings = {}
 
--- Helper function to deep copy tables
-local function CopyTable(source)
-    local copy = {}
-    for key, value in pairs(source) do
-        if type(value) == "table" then
-            copy[key] = CopyTable(value)
-        else
-            copy[key] = value
-        end
-    end
-    return copy
-end
-
--- Default settings
-local defaultSettings = {
-    minimapButton = {
-        show = true,
-        position = 45, -- Default angle position
-    },
-    displayOptions = {
-        showOfflineCharacters = true,
-        showLowLevelCharacters = false,
-        minimumLevel = 60,
-    },
-    sortOptions = {
-        sortBy = "name", -- name, level, class
-        sortOrder = "asc", -- asc, desc
-    }
-}
-
--- Initialize settings
-function CharacterManager_Settings.InitializeSettings()
-    -- Create the settings table if it doesn't exist
-    if not WoWCharacterManagerSettings then
-        WoWCharacterManagerSettings = {}
-    end
-    
-    -- Ensure all default settings exist
-    for category, options in pairs(defaultSettings) do
-        if not WoWCharacterManagerSettings[category] then
-            WoWCharacterManagerSettings[category] = CopyTable(options)
-        else
-            for option, value in pairs(options) do
-                if WoWCharacterManagerSettings[category][option] == nil then
-                    WoWCharacterManagerSettings[category][option] = value
+-- Create the settings tab content
+function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
+        local settingsFrame = tabFrames[6]  -- Settings is the 6th tab
+        if not settingsFrame then return end
+        
+        -- Title
+        local title = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        title:SetPoint("TOPLEFT", 20, -20)
+        title:SetText("Settings")
+        
+        -- General Settings Section with background
+        local generalSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
+        generalSettingsContainer:SetSize(360, 120)
+        generalSettingsContainer:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
+        generalSettingsContainer:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 32,
+            edgeSize = 16,
+            insets = { left = 5, right = 5, top = 5, bottom = 5 }
+        })
+        
+        -- General Settings Section Title
+        local generalTitle = generalSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        generalTitle:SetPoint("TOPLEFT", 15, -15)
+        generalTitle:SetText("General Settings")
+        
+        -- Phase dropdown
+        local phaseLabel = generalSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        phaseLabel:SetPoint("TOPLEFT", generalTitle, "BOTTOMLEFT", 5, -15)
+        phaseLabel:SetText("Game Phase:")
+        
+        local phaseDropdown = CreateFrame("Frame", "CharacterManagerPhaseDropdown", generalSettingsContainer, "UIDropDownMenuTemplate")
+        phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+        
+        local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
+        local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 1
+        
+        UIDropDownMenu_Initialize(phaseDropdown, function(self, level)
+            local info = UIDropDownMenu_CreateInfo()
+            info.func = function(self)
+                currentPhase = self.value
+                UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase])
+                -- Save the setting
+                if not MyAddonSettings then MyAddonSettings = {} end
+                MyAddonSettings.currentPhase = currentPhase
+            end
+            
+            for i, phaseName in ipairs(phases) do
+                info.text = phaseName
+                info.value = i
+                info.checked = (currentPhase == i)
+                UIDropDownMenu_AddButton(info, level)
+            end
+        end)
+        
+        UIDropDownMenu_SetWidth(phaseDropdown, 100)
+        UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 1")
+        
+        -- Character-specific Settings Section with background
+        local characterSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
+        characterSettingsContainer:SetSize(360, 200)
+        characterSettingsContainer:SetPoint("TOPLEFT", generalSettingsContainer, "BOTTOMLEFT", 0, -20)
+        characterSettingsContainer:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 32,
+            edgeSize = 16,
+            insets = { left = 5, right = 5, top = 5, bottom = 5 }
+        })
+        
+        -- Character-specific Settings Section Title
+        local characterTitle = characterSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        characterTitle:SetPoint("TOPLEFT", 15, -15)
+        characterTitle:SetText("Character-Specific Settings")
+        
+        -- Character dropdown
+        local characterDropdown = CreateFrame("Frame", "CharacterManagerSettingsDropdown", characterSettingsContainer, "UIDropDownMenuTemplate")
+        characterDropdown:SetPoint("TOPLEFT", characterTitle, "BOTTOMLEFT", -15, -10)
+        
+        local selectedCharacter = nil
+        
+        local function UpdateCharacterDropdown()
+            local characters = {}
+            for fullName, _ in pairs(MyAddonDB) do
+                table.insert(characters, fullName)
+            end
+            table.sort(characters)
+            
+            UIDropDownMenu_Initialize(characterDropdown, function(self, level)
+                local info = UIDropDownMenu_CreateInfo()
+                info.func = function(self)
+                    selectedCharacter = self.value
+                    UIDropDownMenu_SetText(characterDropdown, selectedCharacter)
+                    -- Update character-specific settings display
+                    CharacterManager_Settings.UpdateCharacterSettings(characterSettingsContainer, selectedCharacter, characterDropdown)
                 end
+                
+                for _, charName in ipairs(characters) do
+                    info.text = charName
+                    info.value = charName
+                    info.checked = (selectedCharacter == charName)
+                    UIDropDownMenu_AddButton(info, level)
+                end
+            end)
+            
+            if #characters > 0 and not selectedCharacter then
+                selectedCharacter = characters[1]
+                UIDropDownMenu_SetText(characterDropdown, selectedCharacter)
+                -- Initialize character settings display
+                CharacterManager_Settings.UpdateCharacterSettings(characterSettingsContainer, selectedCharacter, characterDropdown)
+            else
+                UIDropDownMenu_SetText(characterDropdown, selectedCharacter or "Select Character")
             end
         end
-    end
-    
-    return WoWCharacterManagerSettings
+        
+        UpdateCharacterDropdown()
 end
 
--- Create settings UI
--- Create settings UI
-function CharacterManager_Settings.CreateSettingsUI(parentFrame)
-    -- Make sure settings are initialized before creating UI elements
-    local settings = CharacterManager_Settings.InitializeSettings()
-    
-    local settingsFrame = CreateFrame("Frame", nil, parentFrame)
-    settingsFrame:SetAllPoints()
-    
-    -- Title
-    local title = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 20, -20)
-    title:SetText("Settings")
-    
-    -- Minimap Button Settings
-    local minimapSection = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    minimapSection:SetPoint("TOPLEFT", 20, -50)
-    minimapSection:SetText("Minimap Button")
-    
-    local showMinimapButton = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
-    showMinimapButton:SetPoint("TOPLEFT", 30, -70)
-    showMinimapButton:SetChecked(settings.minimapButton.show)
-    
-    local showMinimapText = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    showMinimapText:SetPoint("LEFT", showMinimapButton, "RIGHT", 5, 0)
-    showMinimapText:SetText("Show minimap button")
-    
-    showMinimapButton:SetScript("OnClick", function()
-        settings.minimapButton.show = showMinimapButton:GetChecked()
-        CharacterManager_Settings.UpdateMinimapButton()
-    end)
-    
-    -- Display Options
-    local displaySection = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    displaySection:SetPoint("TOPLEFT", 20, -110)
-    displaySection:SetText("Display Options")
-    
-    local showOfflineChars = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
-    showOfflineChars:SetPoint("TOPLEFT", 30, -130)
-    showOfflineChars:SetChecked(settings.displayOptions.showOfflineCharacters)
-    
-    local showOfflineText = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    showOfflineText:SetPoint("LEFT", showOfflineChars, "RIGHT", 5, 0)
-    showOfflineText:SetText("Show offline characters")
-    
-    showOfflineChars:SetScript("OnClick", function()
-        settings.displayOptions.showOfflineCharacters = showOfflineChars:GetChecked()
-    end)
-    
-    local showLowLevelChars = CreateFrame("CheckButton", nil, settingsFrame, "UICheckButtonTemplate")
-    showLowLevelChars:SetPoint("TOPLEFT", 30, -150)
-    showLowLevelChars:SetChecked(settings.displayOptions.showLowLevelCharacters)
-    
-    local showLowLevelText = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    showLowLevelText:SetPoint("LEFT", showLowLevelChars, "RIGHT", 5, 0)
-    showLowLevelText:SetText("Show low level characters")
-    
-    showLowLevelChars:SetScript("OnClick", function()
-        settings.displayOptions.showLowLevelCharacters = showLowLevelChars:GetChecked()
-        minLevelSlider:SetEnabled(showLowLevelChars:GetChecked())
-    end)
-    
-    -- Minimum level slider
-    local minLevelSlider = CreateFrame("Slider", nil, settingsFrame, "OptionsSliderTemplate")
-    minLevelSlider:SetPoint("TOPLEFT", 30, -180)
-    minLevelSlider:SetWidth(200)
-    minLevelSlider:SetMinMaxValues(1, 60)
-    minLevelSlider:SetValue(settings.displayOptions.minimumLevel)
-    minLevelSlider:SetValueStep(1)
-    minLevelSlider:SetObeyStepOnDrag(true)
-    minLevelSlider:SetEnabled(settings.displayOptions.showLowLevelCharacters)
-    
-    minLevelSlider.Low:SetText("1")
-    minLevelSlider.High:SetText("60")
-    minLevelSlider.Text:SetText("Minimum Level: " .. settings.displayOptions.minimumLevel)
-    
-    minLevelSlider:SetScript("OnValueChanged", function(self, value)
-        value = math.floor(value)
-        settings.displayOptions.minimumLevel = value
-        self.Text:SetText("Minimum Level: " .. value)
-    end)
-    
-    -- Save button
-    local saveButton = CreateFrame("Button", nil, settingsFrame, "UIPanelButtonTemplate")
-    saveButton:SetSize(100, 25)
-    saveButton:SetPoint("BOTTOMRIGHT", -20, 20)
-    saveButton:SetText("Save")
-    
-    saveButton:SetScript("OnClick", function()
-        print("Settings saved!")
-        -- Any additional save logic can go here
-    end)
-    
-    return settingsFrame
-end
-
--- Update minimap button based on settings
-function CharacterManager_Settings.UpdateMinimapButton()
-    if MyAddonMinimapButton then
-        if WoWCharacterManagerSettings.minimapButton.show then
-            MyAddonMinimapButton:Show()
-        else
-            MyAddonMinimapButton:Hide()
-        end
-    end
-end
-
--- Get settings value
-function CharacterManager_Settings.GetSetting(category, option)
-        -- Make sure settings are initialized
-        CharacterManager_Settings.InitializeSettings()
-    if WoWCharacterManagerSettings and WoWCharacterManagerSettings[category] and WoWCharacterManagerSettings[category][option] ~= nil then
-        return WoWCharacterManagerSettings[category][option]
-    elseif defaultSettings[category] and defaultSettings[category][option] ~= nil then
-        return defaultSettings[category][option]
-    end
-    return nil
-end
-
--- Set settings value
-function CharacterManager_Settings.SetSetting(category, option, value)
-    if not WoWCharacterManagerSettings then
-        CharacterManager_Settings.InitializeSettings()
+-- Update character-specific settings display
+function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, characterName, anchorFrame)
+    -- Remove any existing character settings
+    if settingsFrame.characterSettings then
+        settingsFrame.characterSettings:Hide()
+        settingsFrame.characterSettings:SetParent(nil)
     end
     
-    if not WoWCharacterManagerSettings[category] then
-        WoWCharacterManagerSettings[category] = {}
-    end
+    if not characterName or not MyAddonDB[characterName] then return end
     
-    WoWCharacterManagerSettings[category][option] = value
+    -- Create container for character settings
+    local settingsContainer = CreateFrame("Frame", nil, settingsFrame)
+    settingsContainer:SetSize(settingsFrame:GetWidth() - 40, 150)
+    settingsContainer:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 15, -20)
+    settingsFrame.characterSettings = settingsContainer
+    
+    -- Character info
+    local charInfo = settingsContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    charInfo:SetPoint("TOPLEFT", 0, 0)
+    
+    local charData = MyAddonDB[characterName]
+    local infoText = characterName
+    if charData.class then
+        local classColor = RAID_CLASS_COLORS[charData.class] or {r=1, g=1, b=1}
+        infoText = string.format("|cff%02x%02x%02x%s|r", 
+            classColor.r*255, classColor.g*255, classColor.b*255, 
+            infoText)
+    end
+    if charData.level then
+        infoText = infoText .. " (Level " .. charData.level .. ")"
+    end
+    charInfo:SetText(infoText)
 end

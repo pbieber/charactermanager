@@ -71,7 +71,7 @@ local function InitializeAddon()
 end
 
 local function InitializeSettings()
-    WoWCharacterManagerSettings = CharacterManager_Settings.InitializeSettings()
+    -- Nothing to initialize yet, but we'll keep this function for future use
 end
 
 InitializeAddon()
@@ -144,15 +144,6 @@ end
 ---- Buffs Tab
 ------------------------
 
-
--- Add profession cooldown saving to the SaveCharacter function
-local originalSaveCharacter = SaveCharacter
-SaveCharacter = function()
-    originalSaveCharacter()
-    SaveProfessionCooldowns()
-    CheckProfessionsAndSpells()
-end
-
 local function OnSpellCast(self, event, unit, _, spellID)
     if unit ~= "player" then return end
     
@@ -200,62 +191,13 @@ local function OnSpellCast(self, event, unit, _, spellID)
     end
 end
 
-local function ShowBuffSettingsDropdown(characterName, anchorFrame)
-    -- Create dropdown menu if it doesn't exist
-    if not buffSettingsDropdown then
-        buffSettingsDropdown = CreateFrame("Frame", "BuffSettingsDropdown", UIParent, "BackdropTemplate")
-        buffSettingsDropdown:SetSize(300, 350)
-        buffSettingsDropdown:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true,
-            tileSize = 32,
-            edgeSize = 32,
-            insets = { left = 11, right = 12, top = 12, bottom = 11 }
-        })
-        buffSettingsDropdown:SetFrameStrata("DIALOG")
-        
-        -- Title
-        local title = buffSettingsDropdown:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        title:SetPoint("TOP", 0, -15)
-        buffSettingsDropdown.title = title
-        
-        -- Close button
-        local closeButton = CreateFrame("Button", nil, buffSettingsDropdown, "UIPanelCloseButton")
-        closeButton:SetPoint("TOPRIGHT", -5, -5)
-        closeButton:SetScript("OnClick", function() buffSettingsDropdown:Hide() end)
-        
-        -- Create a container for buff settings
-        local content = CreateFrame("Frame", nil, buffSettingsDropdown)
-        content:SetPoint("TOPLEFT", 15, -35)
-        content:SetPoint("BOTTOMRIGHT", -15, 15)
-        buffSettingsContainer = content
-        
-        buffSettingsDropdown.content = content
-    end
-    
-    -- Store the character name
-    buffSettingsDropdown.character = characterName
-    
-    -- Update title
-    buffSettingsDropdown.title:SetText("Buff Settings: " .. (string.match(characterName, "(.+) %- ") or characterName))
-    
-    -- Position dropdown relative to the main addon frame, not the screen
-    buffSettingsDropdown:ClearAllPoints()
-    buffSettingsDropdown:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    
-    -- Update buff settings
-    UpdateBuffSettings(characterName)
-    
-    -- Show the dropdown
-    buffSettingsDropdown:Show()
-end
-
 -- Function to create the settings tab content
-local function CreateSettingsTab()
-    return CharacterManager_Settings.CreateSettingsUI(tabFrames[5])
+local function CreateSettingsTabContent()
+    -- Use the module function to create settings tab content
+    CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
 end
 
+-- First, define the original SaveCharacter function
 local function SaveCharacter()
     local playerName = UnitName("player")
     local realmName = GetRealmName()
@@ -303,6 +245,11 @@ local function SaveCharacter()
     end
     print("Character saved:", fullName)
     MyAddonDB = characters
+    
+    -- Add these lines to handle profession cooldowns directly in the main SaveCharacter function
+    -- instead of trying to override it
+    SaveProfessionCooldowns()
+    CheckProfessionsAndSpells()
 end
 
 -- Update the ADDON_LOADED event handler
@@ -737,8 +684,5 @@ minimapButton:SetScript("OnClick", function()
         MyAddon:Show()
     end
 end)
-
--- Apply settings to minimap button
-CharacterManager_Settings.UpdateMinimapButton()
 
 MyAddon:Show()
