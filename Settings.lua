@@ -40,8 +40,17 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
         
         local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
-        -- Set default phase to 3
-        local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 3
+        
+        -- Ensure WoWCharacterManagerSettings exists
+        if not WoWCharacterManagerSettings then
+            WoWCharacterManagerSettings = {
+                currentPhase = 3  -- Default to Phase 3
+            }
+        elseif not WoWCharacterManagerSettings.currentPhase then
+            WoWCharacterManagerSettings.currentPhase = 3  -- Default to Phase 3
+        end
+        
+        local currentPhase = WoWCharacterManagerSettings.currentPhase
         
         UIDropDownMenu_Initialize(phaseDropdown, function(self, level)
             local info = UIDropDownMenu_CreateInfo()
@@ -49,9 +58,8 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
                 currentPhase = self.value
                 UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase])
                 
-                -- Save the setting
-                if not MyAddonSettings then MyAddonSettings = {} end
-                MyAddonSettings.currentPhase = currentPhase
+                -- Save the setting to the global settings variable
+                WoWCharacterManagerSettings.currentPhase = currentPhase
                 
                 -- Print debug message
                 print("CharacterManager: Phase changed to " .. phases[currentPhase] .. " (Phase ID: " .. currentPhase .. ")")
@@ -59,9 +67,15 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
                 -- Update raid frames based on new phase
                 if CharacterManager_RaidLockouts and CharacterManager_RaidLockouts.RecreateRaidFrames then
                     print("CharacterManager: Recreating raid frames for new phase...")
-                    raidFrames = CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings)
+                    raidFrames = CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, WoWCharacterManagerSettings)
                 else
                     print("CharacterManager: ERROR - Could not recreate raid frames (function not found)")
+                end
+                
+                -- Update buff display if on the buff tab
+                if tabFrames and tabFrames[4] and CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
+                    print("CharacterManager: Updating buff display for new phase...")
+                    CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
                 end
             end
             
@@ -124,6 +138,48 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
             GameTooltip:Show()
         end)
         clearCooldownsButton:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+        
+        -- Debug Buffs Button
+        local debugBuffsButton = CreateFrame("Button", nil, debugSettingsContainer, "UIPanelButtonTemplate")
+        debugBuffsButton:SetSize(120, 24)
+        debugBuffsButton:SetPoint("TOPLEFT", clearCooldownsButton, "BOTTOMLEFT", 0, -10)
+        debugBuffsButton:SetText("Debug Buffs")
+        debugBuffsButton:SetScript("OnClick", function()
+            -- Debug function to print buff data
+            print("--- Buff Debug Info ---")
+            print("Current Phase: " .. (WoWCharacterManagerSettings and WoWCharacterManagerSettings.currentPhase or "Not set (using default 3)"))
+            for fullName, charData in pairs(MyAddonDB) do
+                print("Character: " .. fullName)
+                if charData.buffs then
+                    print("  Active Buffs:")
+                    for buffName, buffData in pairs(charData.buffs) do
+                        print("    " .. buffName)
+                    end
+                else
+                    print("  No active buffs")
+                end
+                
+                if charData.chronoboon then
+                    print("  Chronoboon Buffs:")
+                    for slot, value in pairs(charData.chronoboon) do
+                        print("    Slot " .. slot .. ": " .. tostring(value))
+                    end
+                else
+                    print("  No chronoboon buffs")
+                end
+            end
+        end)
+        
+        -- Add a tooltip to explain what the button does
+        debugBuffsButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Debug Buff Information")
+            GameTooltip:AddLine("Prints detailed information about character buffs to the chat window", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        debugBuffsButton:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
         end)
         

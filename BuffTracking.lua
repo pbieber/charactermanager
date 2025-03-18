@@ -177,9 +177,22 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
         frame:SetParent(nil)
     end
     buffFrames = {}
-
+    
     local yOffset = -20  -- Start closer to the top for more compact layout
     local frameWidth = buffFrame:GetWidth()
+    
+    local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 3
+
+    -- Filter buffs based on current phase
+    local phaseFilteredBuffs = {}
+    for _, buffInfo in ipairs(trackedBuffs) do
+        if not buffInfo.phase or buffInfo.phase <= currentPhase then
+            table.insert(phaseFilteredBuffs, buffInfo)
+        end
+    end
+
+    -- Debug message about phase filtering
+    print("CharacterManager: Showing buffs for Phase " .. currentPhase .. " (" .. #phaseFilteredBuffs .. " buffs available)")
 
     for fullName, charData in pairs(MyAddonDB) do
         -- Skip characters below level 55
@@ -194,7 +207,7 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
             -- Initialize character settings if they don't exist
             if not MyAddonSettings.characters[fullName] then
                 MyAddonSettings.characters[fullName] = {
-                    trackedBuffs = {}
+                    phaseFilteredBuffs = {}
                 }
                 
                 -- Copy default settings
@@ -224,7 +237,7 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
             
             -- Count active buffs among tracked ones
             if charData.buffs then
-                for _, buffInfo in ipairs(trackedBuffs) do
+                for _, buffInfo in ipairs(phaseFilteredBuffs) do
                     -- Only count buffs that are tracked for this character
                     if MyAddonSettings.characters[fullName].trackedBuffs[buffInfo.name] then
                         totalBuffs = totalBuffs + 1
@@ -284,7 +297,9 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
             end)
 
             table.insert(buffFrames, characterFrame)
-            table.insert(buffFrames, debugButton)  -- Add debug button to buffFrames
+            if debugButton then  -- Check if debugButton exists before adding it
+                table.insert(buffFrames, debugButton)
+            end
             yOffset = yOffset - 24  -- Reduced spacing between character entries
 
             -- If not collapsed, show buff details
@@ -297,8 +312,8 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
                 local detailYOffset = 0
                 local detailHeight = 0
                 
-                -- Add each tracked buff
-                for _, buffInfo in ipairs(trackedBuffs) do
+                -- Add each tracked buff - USE PHASE FILTERED BUFFS HERE
+                for _, buffInfo in ipairs(phaseFilteredBuffs) do
                     local buffName = buffInfo.name
                     
                     -- Only show buffs that are tracked for this character
@@ -329,93 +344,94 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
                         local buffIcon = buffRow:CreateTexture(nil, "ARTWORK")
                         buffIcon:SetSize(14, 14)  -- Small icon
                         buffIcon:SetPoint("LEFT", 0, 0)
-                -- Set buff icon texture
-                local iconPath = nil
-                if buffInfo.icon then
-                    iconPath = buffInfo.icon
-                    buffIcon:SetTexture(iconPath)
-                else
-                    -- Try to get icon from game data
-                    local spellId = buffInfo.spellIds and buffInfo.spellIds[1] or 0
-                    local _, _, icon = GetSpellInfo(spellId)
-                    if icon then
-                        iconPath = icon
-                        buffIcon:SetTexture(icon)
-                    else
-                        -- Fallback icon
-                        iconPath = "Interface\\Icons\\INV_Misc_QuestionMark"
-                        buffIcon:SetTexture(iconPath)
-                    end
-                end
-                
-                -- Create buff text with status
-                local statusText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                statusText:SetPoint("LEFT", buffIcon, "RIGHT", 5, 0)
-                
-                local textColor = {r=1, g=0, b=0} -- Default: red (not active)
-                local statusString = "Missing"
-                
-                if isActive then
-                    textColor = {r=0, g=0.7, b=1} -- Light blue for active
-                    
-                    -- Display remaining time for active buffs
-                    local buffData = charData.buffs[buffName]
-                    if buffData and buffData.expirationTime then
-                        local remainingTime = buffData.expirationTime
-                        if remainingTime > 0 then
-                            statusString = FormatTimeMinutes(remainingTime)
+                        
+                        -- Set buff icon texture
+                        local iconPath = nil
+                        if buffInfo.icon then
+                            iconPath = buffInfo.icon
+                            buffIcon:SetTexture(iconPath)
                         else
-                            statusString = "Expired"
-                        end
-                    else
-                        statusString = "Active"
-                    end
-                    
-                    -- Set text for active buffs
-                    statusText:SetText(buffName .. ": " .. statusString)
-                    statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
-                elseif isInBoon then
-                    textColor = {r=0, g=1, b=0} -- Green for in chronoboon
-                    
-                    -- Display remaining time for chronobooned buffs if available
-                    statusString = "Stored"
-                    
-                    -- Check if we have expiration time data for this buff in chronoboon
-                    for _, slot in ipairs(buffInfo.boonSlots or {}) do
-                        if charData.chronoboon and charData.chronoboon[slot] and charData.chronoboon[slot] > 0 then
-                            local timeValue = charData.chronoboon[slot]
-                            local remainingTime
-                            
-                            -- Check if the value is an expiration time or direct remaining time
-                            if timeValue > GetTime() then
-                                -- It's an expiration time
-                                remainingTime = timeValue - GetTime()
+                            -- Try to get icon from game data
+                            local spellId = buffInfo.spellIds and buffInfo.spellIds[1] or 0
+                            local _, _, icon = GetSpellInfo(spellId)
+                            if icon then
+                                iconPath = icon
+                                buffIcon:SetTexture(icon)
                             else
-                                -- It's already a remaining time value
-                                remainingTime = timeValue
+                                -- Fallback icon
+                                iconPath = "Interface\\Icons\\INV_Misc_QuestionMark"
+                                buffIcon:SetTexture(iconPath)
+                            end
+                        end
+                        
+                        -- Create buff text with status
+                        local statusText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                        statusText:SetPoint("LEFT", buffIcon, "RIGHT", 5, 0)
+                        
+                        local textColor = {r=1, g=0, b=0} -- Default: red (not active)
+                        local statusString = "Missing"
+                        
+                        if isActive then
+                            textColor = {r=0, g=0.7, b=1} -- Light blue for active
+                            
+                            -- Display remaining time for active buffs
+                            local buffData = charData.buffs[buffName]
+                            if buffData and buffData.expirationTime then
+                                local remainingTime = buffData.expirationTime
+                                if remainingTime > 0 then
+                                    statusString = FormatTimeMinutes(remainingTime)
+                                else
+                                    statusString = "Expired"
+                                end
+                            else
+                                statusString = "Active"
                             end
                             
-                            if remainingTime > 0 then
-                                statusString = FormatTimeMinutes(remainingTime)
-                            else
-                                statusString = "Expired"
+                            -- Set text for active buffs
+                            statusText:SetText(buffName .. ": " .. statusString)
+                            statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
+                        elseif isInBoon then
+                            textColor = {r=0, g=1, b=0} -- Green for in chronoboon
+                            
+                            -- Display remaining time for chronobooned buffs if available
+                            statusString = "Stored"
+                            
+                            -- Check if we have expiration time data for this buff in chronoboon
+                            for _, slot in ipairs(buffInfo.boonSlots or {}) do
+                                if charData.chronoboon and charData.chronoboon[slot] and charData.chronoboon[slot] > 0 then
+                                    local timeValue = charData.chronoboon[slot]
+                                    local remainingTime
+                                    
+                                    -- Check if the value is an expiration time or direct remaining time
+                                    if timeValue > GetTime() then
+                                        -- It's an expiration time
+                                        remainingTime = timeValue - GetTime()
+                                    else
+                                        -- It's already a remaining time value
+                                        remainingTime = timeValue
+                                    end
+                                    
+                                    if remainingTime > 0 then
+                                        statusString = FormatTimeMinutes(remainingTime)
+                                    else
+                                        statusString = "Expired"
+                                    end
+                                    break
+                                end
                             end
-                            break
-                        end
-                    end
-                    
-                    -- Set text first (without chronoboon icon)
-                    statusText:SetText(buffName .. ": ")
-                    statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
-                    
-                    -- Create chronoboon icon after the text
-                    local chronoboonIcon = buffRow:CreateTexture(nil, "ARTWORK")
-                    chronoboonIcon:SetSize(14, 14)
-                    chronoboonIcon:SetPoint("LEFT", statusText, "RIGHT", 2, 0)
-                    chronoboonIcon:SetTexture("Interface\\Icons\\inv_misc_enggizmos_24")
-                    
-                    -- Create status string after the chronoboon icon
-                    local statusValueText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                            
+                            -- Set text first (without chronoboon icon)
+                            statusText:SetText(buffName .. ": ")
+                            statusText:SetTextColor(textColor.r, textColor.g, textColor.b)
+                            
+                            -- Create chronoboon icon after the text
+                            local chronoboonIcon = buffRow:CreateTexture(nil, "ARTWORK")
+                            chronoboonIcon:SetSize(14, 14)
+                            chronoboonIcon:SetPoint("LEFT", statusText, "RIGHT", 2, 0)
+                            chronoboonIcon:SetTexture("Interface\\Icons\\inv_misc_enggizmos_24")
+                            
+                            -- Create status string after the chronoboon icon
+                            local statusValueText = buffRow:CreateFontString(nil, "OVERLAY", "GameFontNormal")
                     statusValueText:SetPoint("LEFT", chronoboonIcon, "RIGHT", 3, 0)
                     statusValueText:SetText(statusString)
                     statusValueText:SetTextColor(textColor.r, textColor.g, textColor.b)

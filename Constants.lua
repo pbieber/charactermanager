@@ -86,6 +86,7 @@ CharacterManager_TrackedBuffs = {
             --473387,  -- Horn of the Dawn (SoD)
         },
         boonSlots  = {20},
+        phase      = 1,  -- Available from Phase 1
     },
     {
         name       = "Warchief's Blessing", --"Might of Stormwind / Blackrock /
@@ -97,6 +98,7 @@ CharacterManager_TrackedBuffs = {
             16609,   -- Warchief's Blessing
         },
         boonSlots  = {21, 29},
+        phase      = 1,  -- Available from Phase 1
     },
     {
         name       = "Songflower Serenade", -- / Lullaby
@@ -106,6 +108,7 @@ CharacterManager_TrackedBuffs = {
             --473399,  -- Songflower Lullaby (SoD)
         },
         boonSlots  = {23},
+        phase      = 1,  -- Available from Phase 1
     },
     {
         name       = "Dire Maul Tribute Buffs", 
@@ -117,6 +120,7 @@ CharacterManager_TrackedBuffs = {
             --473403,  -- Blessing of Neptulon (SoD) (UPDATED ID)
         },
         boonSlots  = {17,18,19},
+        phase      = 2,  -- Available from Phase 2 (Dire Maul)
     },
     {
         name       = "Any Darkmoon Faire Buff",
@@ -133,6 +137,7 @@ CharacterManager_TrackedBuffs = {
             --473450,-- Dark Fortune of Damage (SoD)
         },
         boonSlots  = {24},
+        phase      = 3,  -- Available from Phase 3 (Darkmoon Faire)
     },
     {
         name       = "Spirit of Zandalar", -- / Dreams
@@ -143,6 +148,7 @@ CharacterManager_TrackedBuffs = {
             --473476,  -- Dreams of Zandalar (SoD)
         },
         boonSlots  = {22},
+        phase      = 4,  -- Available from Phase 4 (ZG)
     },
 }
 
