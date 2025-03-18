@@ -245,6 +245,7 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
 end
 
 -- Update character-specific settings display
+-- Update character-specific settings display
 function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, characterName, anchorFrame)
     -- Remove any existing character settings
     if settingsFrame.characterSettings then
@@ -276,4 +277,107 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
         infoText = infoText .. " (Level " .. charData.level .. ")"
     end
     charInfo:SetText(infoText)
+    
+    -- Buff tracking settings
+    local buffTrackingTitle = settingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    buffTrackingTitle:SetPoint("TOPLEFT", charInfo, "BOTTOMLEFT", 0, -15)
+    buffTrackingTitle:SetText("Buff Tracking")
+    
+    -- Initialize character settings if needed
+    if not WoWCharacterManagerSettings.characters then
+        WoWCharacterManagerSettings.characters = {}
+    end
+    
+    if not WoWCharacterManagerSettings.characters[characterName] then
+        WoWCharacterManagerSettings.characters[characterName] = {
+            trackedBuffs = {}
+        }
+        
+        -- Copy default settings
+        if WoWCharacterManagerSettings.defaultBuffs then
+            for buffName, enabled in pairs(WoWCharacterManagerSettings.defaultBuffs) do
+                WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] = enabled
+            end
+        else
+            -- Initialize default buff settings if they don't exist
+            WoWCharacterManagerSettings.defaultBuffs = {}
+            for _, buffInfo in ipairs(CharacterManager_TrackedBuffs) do
+                WoWCharacterManagerSettings.defaultBuffs[buffInfo.name] = true
+                WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffInfo.name] = true
+            end
+        end
+    end
+    
+    -- Create buff tracking checkboxes
+    local yOffset = -40  -- Start below the character info and title
+    local checkboxes = {}
+    
+    for i, buffInfo in ipairs(CharacterManager_TrackedBuffs) do
+        local buffName = buffInfo.name
+        local checkbox = CreateFrame("CheckButton", nil, settingsContainer, "UICheckButtonTemplate")
+        checkbox:SetPoint("TOPLEFT", 10, yOffset)
+        checkbox:SetSize(24, 24)
+        
+        local label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("LEFT", checkbox, "RIGHT", 5, 0)
+        label:SetText(buffName)
+        
+        -- Set initial state
+        local isEnabled = WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName]
+        checkbox:SetChecked(isEnabled)
+        
+        -- Handle checkbox changes
+        checkbox:SetScript("OnClick", function(self)
+            local checked = self:GetChecked()
+            WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] = checked
+            
+            -- Update buff display if on the buff tab
+            if CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
+                CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+            end
+        end)
+        
+        table.insert(checkboxes, checkbox)
+        yOffset = yOffset - 25
+    end
+    
+    -- Add "Set as Default" button
+    local defaultButton = CreateFrame("Button", nil, settingsContainer, "UIPanelButtonTemplate")
+    defaultButton:SetSize(120, 24)
+    defaultButton:SetPoint("TOPLEFT", 10, yOffset - 10)
+    defaultButton:SetText("Set as Default")
+    defaultButton:SetScript("OnClick", function()
+        -- Copy current character settings to default
+        for _, buffInfo in ipairs(CharacterManager_TrackedBuffs) do
+            local buffName = buffInfo.name
+            WoWCharacterManagerSettings.defaultBuffs[buffName] = 
+                WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] or false
+        end
+        print("Default buff settings updated based on " .. characterName)
+    end)
+    
+    -- Add "Apply to All" button
+    local applyAllButton = CreateFrame("Button", nil, settingsContainer, "UIPanelButtonTemplate")
+    applyAllButton:SetSize(120, 24)
+    applyAllButton:SetPoint("LEFT", defaultButton, "RIGHT", 10, 0)
+    applyAllButton:SetText("Apply to All")
+    applyAllButton:SetScript("OnClick", function()
+        -- Apply current character settings to all characters
+        for charName, _ in pairs(WoWCharacterManagerSettings.characters) do
+            for _, buffInfo in ipairs(CharacterManager_TrackedBuffs) do
+                local buffName = buffInfo.name
+                WoWCharacterManagerSettings.characters[charName].trackedBuffs[buffName] = 
+                    WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] or false
+            end
+        end
+        print("Applied buff settings to all characters")
+        
+        -- Update buff display if on the buff tab
+        if CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
+            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+        end
+    end)
+    
+    -- Adjust container height based on content
+    settingsContainer:SetHeight(math.abs(yOffset) + 50)  -- Add some padding
 end

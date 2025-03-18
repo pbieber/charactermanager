@@ -379,6 +379,7 @@ function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, M
                             if buffData and buffData.expirationTime then
                                 local remainingTime = buffData.expirationTime
                                 if remainingTime > 0 then
+                                    -- Format time properly using FormatTimeMinutes
                                     statusString = FormatTimeMinutes(remainingTime)
                                 else
                                     statusString = "Expired"
@@ -484,13 +485,35 @@ function CharacterManager_BuffTracking.TrackCurrentPlayerBuffs(MyAddonDB)
             local name, icon, count, _, duration, expirationTime, source, _, _, spellId = UnitBuff("player", i)
             if not name then break end
             
-            if name == buffInfo.name or spellId == buffInfo.id then
+            -- Check if this buff matches any of the spellIds in the buffInfo
+            local isMatch = false
+            if buffInfo.spellIds then
+                for _, id in ipairs(buffInfo.spellIds) do
+                    if spellId == id then
+                        isMatch = true
+                        break
+                    end
+                end
+            end
+            
+            -- Also check by name as a fallback
+            if not isMatch and name == buffInfo.name then
+                isMatch = true
+            end
+            
+            if isMatch then
+                -- Calculate remaining time correctly
+                local remainingTime = 0
+                if expirationTime and expirationTime > 0 then
+                    remainingTime = expirationTime - GetTime()
+                end
+                
                 MyAddonDB[fullName].buffs[buffInfo.name] = {
                     name = name,
                     icon = icon,
                     count = count,
                     duration = duration,
-                    expirationTime = expirationTime,
+                    expirationTime = remainingTime, -- Store remaining time directly
                     source = source,
                     spellId = spellId,
                     lastUpdated = time()
