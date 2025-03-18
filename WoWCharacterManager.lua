@@ -138,6 +138,10 @@ end
 
 local function UpdateAllRaidStatuses()
     MyAddonDB = _G.UpdateAllRaidStatuses(characters)
+        -- Update raid status overviews if the raids tab is currently shown
+        if selectedTab == 3 and raidFrames then
+            CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
+        end
 end
 
 ------------------------
@@ -394,6 +398,7 @@ for i, tabName in ipairs(tabs) do
         if i == 2 then  -- Professions tab
             UpdateProfessionCooldowns()
         elseif i == 3 then  -- Raids tab
+            CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
             if raidFrames then
                 for _, raidData in ipairs(raidFrames) do
                     if raidData.characters and raidData.characters:IsShown() then
@@ -437,209 +442,11 @@ professionUpdateTimer:SetScript("OnUpdate", function(self, elapsed)
         self.elapsed = 0
     end
 end)
+-- Create raid frames using the module function
+raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames)
 
--- Raids Tab Content
-local function UpdateRaidFramesPosition()
-    local yOffset = -20  -- Start closer to the top
-    for i, raidData in ipairs(raidFrames) do
-        raidData.frame:SetPoint("TOPLEFT", tabFrames[3], "TOPLEFT", 10, yOffset)
-        yOffset = yOffset - raidData.frame:GetHeight()
-        if raidData.characters:IsShown() then
-            yOffset = yOffset - raidData.characters:GetHeight() - 5  -- Reduced gap between character frame and next raid
-        else
-            yOffset = yOffset - 5  -- Small gap when character frame is not shown
-        end
-    end
-end
-
-for i, raidName in ipairs(raids) do
-    -- Create a button for the entire raid header instead of a frame with separate button
-    local raidFrame = CreateFrame("Button", nil, tabFrames[3], "UIPanelButtonTemplate")
-    raidFrame:SetSize(380, 30)
-    
-    -- Clear the default button text
-    raidFrame:SetText("")
-    
-    -- Add raid icon
-    local raidIcon = raidFrame:CreateTexture(nil, "ARTWORK")
-    raidIcon:SetSize(20, 20)
-    raidIcon:SetPoint("LEFT", 110, 0)
-    
-    -- Set appropriate icon based on raid name
-    local iconPath
-    if raidName == "mc" then
-        iconPath = "Interface\\Icons\\inv_hammer_unique_sulfuras"
-    elseif raidName == "bwl" then
-        iconPath = "Interface\\Icons\\inv_misc_head_dragon_black"
-    elseif raidName == "ony" then
-        iconPath = "Interface\\Icons\\inv_misc_head_dragon_01"
-    elseif raidName == "zg" then
-        iconPath = "Interface\\Icons\\inv_misc_idol_03"
-    elseif raidName == "aq20" then
-        iconPath = "Interface\\Icons\\inv_misc_ahnqirajtrinket_01"
-    elseif raidName == "aq40" then
-        iconPath = "Interface\\Icons\\inv_misc_qirajicrystal_05"
-    elseif raidName == "naxx" then
-        iconPath = "Interface\\Icons\\inv_trinket_naxxramas04"
-    else
-        iconPath = "Interface\\Icons\\inv_misc_questionmark"
-    end
-    raidIcon:SetTexture(iconPath)
-    
-    -- Create raid title text (centered)
-    local raidTitle = raidFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    raidTitle:SetPoint("CENTER", 0, 0)
-    raidTitle:SetText(raidDisplayNames[raidName] or raidName)
-    
-    -- Add expand/collapse indicator
-    local expandIndicator = raidFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    expandIndicator:SetPoint("RIGHT", -10, 0)
-    expandIndicator:SetText("+")
-    raidFrame.expandIndicator = expandIndicator
-
-    -- Character Frame (Initially Hidden)
-    local characterFrame = CreateFrame("Frame", nil, tabFrames[3])
-    characterFrame:SetSize(380, 5)  -- Start with minimal height
-    characterFrame:SetPoint("TOPLEFT", raidFrame, "BOTTOMLEFT", 0, -2)  -- Reduced gap
-    characterFrame:Hide()
-
-    local function PopulateCharacterFrame(raidName)
-        characterFrame:SetHeight(5)
-        local yOffset = -2
-    
-        -- Clear existing font strings
-        for _, child in ipairs({characterFrame:GetChildren()}) do
-            if child:IsObjectType("FontString") then
-                child:Hide()
-                child:SetText("")
-            end
-        end
-    
-        -- Add headers
-        local headerName = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        local headerStatus = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        local headerTime = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        local headerProgress = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    
-        headerName:SetPoint("TOPLEFT", 10, yOffset)
-        headerStatus:SetPoint("TOPLEFT", 120, yOffset)
-        headerTime:SetPoint("TOPLEFT", 220, yOffset)
-        headerProgress:SetPoint("TOPLEFT", 320, yOffset)
-    
-        headerName:SetText("Name")
-        headerStatus:SetText("ID Status")
-        headerTime:SetText("Reset")
-        headerProgress:SetText("Progress")
-    
-        yOffset = yOffset - 20  -- Add extra space after headers
-        characterFrame:SetHeight(characterFrame:GetHeight() + 20)
-    
-        -- Collect and sort character data
-        local sortedCharacters = {}
-        if MyAddonDB then
-            for fullName, char in pairs(MyAddonDB) do
-                if char.name and char.raidStatus and char.raidStatus[raidName] and char.level and char.level >= 60 then
-                    table.insert(sortedCharacters, {
-                        name = char.name,
-                        class = char.class,
-                        raidInfo = char.raidStatus[raidName],
-                        fullName = fullName
-                    })
-                end
-            end
-        end
-    
-        -- Sort characters: Open first, then alphabetically
-        table.sort(sortedCharacters, function(a, b)
-            if a.raidInfo.status == b.raidInfo.status then
-                return a.name < b.name
-            else
-                return a.raidInfo.status == "Open"
-            end
-        end)
-    
-        -- Display sorted characters
-        for _, charData in ipairs(sortedCharacters) do
-            local char = charData
-            local raidInfo = char.raidInfo
-            local status = raidInfo.status or "Unknown"
-            local resetTime = raidInfo.reset or 0
-            local progress = raidInfo.progress or 0
-            local total = raidInfo.total or 0
-            local lastUpdated = raidInfo.lastUpdated or time()
-    
-            local currentTime = time()
-            local timeLeft = math.max(0, resetTime - (currentTime - lastUpdated))
-            local timeString = FormatTime(timeLeft)
-    
-            -- Create font strings for each piece of information
-            local nameText = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            local statusText = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            local timeText = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            local progressText = characterFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    
-            -- Position the font strings
-            nameText:SetPoint("TOPLEFT", 10, yOffset)
-            statusText:SetPoint("TOPLEFT", 120, yOffset)
-            timeText:SetPoint("TOPLEFT", 220, yOffset)
-            progressText:SetPoint("TOPLEFT", 320, yOffset)
-    
-            -- Set the text for each font string with color coding
-            local classColor = GetClassColor(char.class or "WARRIOR")
-            nameText:SetText(classColor .. char.name .. "|r")
-            
-            if status == "Open" then
-                statusText:SetText("|cFFFF0000" .. status .. "|r")
-            elseif status == "Locked" then
-                statusText:SetText("|cFF00FF00" .. status .. "|r")
-            else
-                statusText:SetText(status)
-            end
-            
-            timeText:SetText(timeString)
-            
-            if progress == 0 then
-                progressText:SetText("|cFFFF0000" .. progress .. "/" .. total .. "|r")
-            elseif progress == total then
-                progressText:SetText("|cFF00FF00" .. progress .. "/" .. total .. "|r")
-            else
-                progressText:SetText("|cFFFFFF00" .. progress .. "/" .. total .. "|r")
-            end
-    
-            -- Show the font strings
-            nameText:Show()
-            statusText:Show()
-            timeText:Show()
-            progressText:Show()
-    
-            yOffset = yOffset - 16
-    
-            characterFrame:SetHeight(characterFrame:GetHeight() + 16)
-        end
-    end
-
-    local function PopulateThisRaid()
-        PopulateCharacterFrame(raidName)
-    end
-
-    -- Expand/Collapse Button Logic
-    raidFrame:SetScript("OnClick", function()
-        if characterFrame:IsShown() then
-            characterFrame:Hide()
-            expandIndicator:SetText("+")
-        else
-            PopulateThisRaid() -- Populate before showing
-            characterFrame:Show()
-            expandIndicator:SetText("-")
-        end
-        UpdateRaidFramesPosition()
-    end)
-
-    raidFrames[i] = { frame = raidFrame, characters = characterFrame, populate = PopulateThisRaid, raidName = raidName }
-end
-
-UpdateRaidFramesPosition()
-
+-- Update raid frames position
+CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
 
 local function UpdateDisplay()
     if selectedTab == 3 then
