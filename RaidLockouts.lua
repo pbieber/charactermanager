@@ -4,6 +4,40 @@ local raids = CharacterManager_Raids
 local raidDisplayNames = CharacterManager_RaidDisplayNames
 local raidActualNames = CharacterManager_RaidActualNames
 
+
+function CharacterManager_RaidLockouts.GetRaidsForPhase(phase)
+    local phaseRaids = {}
+    
+    -- Phase 1-2: MC and Onyxia
+    if phase >= 1 then
+        table.insert(phaseRaids, "mc")
+        table.insert(phaseRaids, "ony")
+    end
+    
+    -- Phase 3: Add BWL
+    if phase >= 3 then
+        table.insert(phaseRaids, "bwl")
+    end
+    
+    -- Phase 4: Add ZG
+    if phase >= 4 then
+        table.insert(phaseRaids, "zg")
+    end
+    
+    -- Phase 5: Add AQ20 and AQ40
+    if phase >= 5 then
+        table.insert(phaseRaids, "aq20")
+        table.insert(phaseRaids, "aq40")
+    end
+    
+    -- Phase 6: Add Naxx
+    if phase >= 6 then
+        table.insert(phaseRaids, "naxx")
+    end
+    
+    return phaseRaids
+end
+
 function GetRaidLockoutStatus(raidName)
     local actualRaidName = raidActualNames[raidName] or raidName
     local numSavedInstances = GetNumSavedInstances()
@@ -29,7 +63,6 @@ function GetRaidLockoutStatus(raidName)
     end
     return "Open", 0, 0, 0
 end
-
 
 function UpdateAllRaidStatuses()
     local playerName = UnitName("player")
@@ -65,10 +98,14 @@ function CharacterManager_RaidLockouts.FormatTime(seconds)
 end
 -- Add this function to RaidLockouts.lua
 
-function CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames)
+function CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
     local raidFrames = {}
+    currentPhase = currentPhase or 6
+    print("CharacterManager: Creating raid frames for Phase " .. currentPhase)
+     -- Get raids for the current phase
+     local phaseRaids = CharacterManager_RaidLockouts.GetRaidsForPhase(currentPhase or 6)
     
-    for i, raidName in ipairs(raids) do
+    for i, raidName in ipairs(phaseRaids) do
         -- Create a button for the entire raid header instead of a frame with separate button
         local raidFrame = CreateFrame("Button", nil, tabFrames[3], "UIPanelButtonTemplate")
         raidFrame:SetSize(380, 30)
@@ -358,6 +395,31 @@ function CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabF
     end
 end
 
-raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames)
-CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
-CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
+-- Add this function to recreate raid frames based on current phase
+function CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings)
+    -- Get current phase from settings
+    local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 6
+    print("CharacterManager: Recreating raid frames for Phase " .. currentPhase)
+    
+    -- Clear existing raid frames if any
+    if raidFrames then
+        for _, raidData in ipairs(raidFrames) do
+            if raidData.frame then
+                raidData.frame:Hide()
+                raidData.frame:SetParent(nil)
+            end
+            if raidData.characters then
+                raidData.characters:Hide()
+                raidData.characters:SetParent(nil)
+            end
+        end
+    end
+    
+    -- Create new raid frames based on current phase
+    raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+    CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
+    
+    return raidFrames
+end
+

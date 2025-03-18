@@ -40,16 +40,29 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
         
         local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
-        local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 1
+        -- Set default phase to 3
+        local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 3
         
         UIDropDownMenu_Initialize(phaseDropdown, function(self, level)
             local info = UIDropDownMenu_CreateInfo()
             info.func = function(self)
                 currentPhase = self.value
                 UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase])
+                
                 -- Save the setting
                 if not MyAddonSettings then MyAddonSettings = {} end
                 MyAddonSettings.currentPhase = currentPhase
+                
+                -- Print debug message
+                print("CharacterManager: Phase changed to " .. phases[currentPhase] .. " (Phase ID: " .. currentPhase .. ")")
+                
+                -- Update raid frames based on new phase
+                if CharacterManager_RaidLockouts and CharacterManager_RaidLockouts.RecreateRaidFrames then
+                    print("CharacterManager: Recreating raid frames for new phase...")
+                    raidFrames = CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings)
+                else
+                    print("CharacterManager: ERROR - Could not recreate raid frames (function not found)")
+                end
             end
             
             for i, phaseName in ipairs(phases) do
@@ -61,7 +74,7 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         end)
         
         UIDropDownMenu_SetWidth(phaseDropdown, 100)
-        UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 1")
+        UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 3")
         
         -- Debug Tools Section with background
         local debugSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")

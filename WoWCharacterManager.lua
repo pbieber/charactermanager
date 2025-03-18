@@ -443,8 +443,13 @@ professionUpdateTimer:SetScript("OnUpdate", function(self, elapsed)
     end
 end)
 -- Create raid frames using the module function
-raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames)
-
+-- Initialize raid frames with current phase setting
+if CharacterManager_RaidLockouts then
+    local currentPhase = WoWCharacterManagerSettings and WoWCharacterManagerSettings.currentPhase or 3
+    print("CharacterManager: Initial raid frame creation for Phase " .. currentPhase)
+    raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+end
 -- Update raid frames position
 CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
 
