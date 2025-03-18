@@ -63,10 +63,61 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         UIDropDownMenu_SetWidth(phaseDropdown, 100)
         UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 1")
         
+        -- Debug Tools Section with background
+        local debugSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
+        debugSettingsContainer:SetSize(360, 100)
+        debugSettingsContainer:SetPoint("TOPLEFT", generalSettingsContainer, "BOTTOMLEFT", 0, -20)
+        debugSettingsContainer:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 32,
+            edgeSize = 16,
+            insets = { left = 5, right = 5, top = 5, bottom = 5 }
+        })
+        
+        -- Debug Tools Section Title
+        local debugTitle = debugSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        debugTitle:SetPoint("TOPLEFT", 15, -15)
+        debugTitle:SetText("Debug Tools")
+        
+        -- Create a button to clear profession cooldowns
+        local clearCooldownsButton = CreateFrame("Button", nil, debugSettingsContainer, "UIPanelButtonTemplate")
+        clearCooldownsButton:SetSize(200, 24)
+        clearCooldownsButton:SetPoint("TOPLEFT", debugTitle, "BOTTOMLEFT", 5, -15)
+        clearCooldownsButton:SetText("Clear All Profession Cooldowns")
+        clearCooldownsButton:SetScript("OnClick", function()
+            local count = 0
+            -- Loop through all characters and clear their profession cooldowns
+            for fullName, charData in pairs(MyAddonDB) do
+                if charData.professionCooldowns then
+                    charData.professionCooldowns = {}
+                    count = count + 1
+                end
+            end
+            print("Cleared profession cooldowns for " .. count .. " characters.")
+            
+            -- Update the cooldown display if the function exists
+            if _G.UpdateProfessionCooldowns then
+                _G.UpdateProfessionCooldowns()
+            end
+        end)
+        
+        -- Add a tooltip to explain what the button does
+        clearCooldownsButton:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText("Clear all stored profession cooldowns")
+            GameTooltip:AddLine("This will reset all cooldown timers for debugging purposes", 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        clearCooldownsButton:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+        
         -- Character-specific Settings Section with background
         local characterSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
         characterSettingsContainer:SetSize(360, 200)
-        characterSettingsContainer:SetPoint("TOPLEFT", generalSettingsContainer, "BOTTOMLEFT", 0, -20)
+        characterSettingsContainer:SetPoint("TOPLEFT", debugSettingsContainer, "BOTTOMLEFT", 0, -20)
         characterSettingsContainer:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",

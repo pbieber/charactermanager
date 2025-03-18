@@ -198,7 +198,7 @@ local function CreateSettingsTabContent()
 end
 
 -- First, define the original SaveCharacter function
-local function SaveCharacter()
+function SaveCharacter()
     local playerName = UnitName("player")
     local realmName = GetRealmName()
     local fullName = playerName .. " - " .. realmName
