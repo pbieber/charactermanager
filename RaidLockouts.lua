@@ -104,6 +104,20 @@ function CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDi
     print("CharacterManager: Creating raid frames for Phase " .. currentPhase)
      -- Get raids for the current phase
      local phaseRaids = CharacterManager_RaidLockouts.GetRaidsForPhase(currentPhase or 6)
+
+     if not tabFrames or not tabFrames[3] then
+        print("CharacterManager Error: tabFrames[3] is nil. Cannot create raid frames.")
+        return {}
+    end
+    
+         -- Clear any existing frames in the tab
+    for _, child in pairs({tabFrames[3]:GetChildren()}) do
+        if child:GetName() ~= tabFrames[3]:GetName() then
+            child:Hide()
+            child:SetParent(nil)
+        end
+    end
+    
     
     for i, raidName in ipairs(phaseRaids) do
         -- Create a button for the entire raid header instead of a frame with separate button
@@ -383,27 +397,40 @@ end
 
 -- Update position of raid frames in the UI
 function CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+    if not raidFrames or #raidFrames == 0 then return end
+    
     local yOffset = -20  -- Start closer to the top
+    
     for i, raidData in ipairs(raidFrames) do
-        raidData.frame:SetPoint("TOPLEFT", tabFrames[3], "TOPLEFT", 10, yOffset)
-        yOffset = yOffset - raidData.frame:GetHeight()
-        if raidData.characters:IsShown() then
-            yOffset = yOffset - raidData.characters:GetHeight() - 3 -- Reduced gap between character frame and next raid
-        else
-            yOffset = yOffset - 3  -- Small gap when character frame is not shown
+        if raidData and raidData.frame and raidData.frame:IsShown() then
+            raidData.frame:ClearAllPoints()
+            raidData.frame:SetPoint("TOPLEFT", tabFrames[3], "TOPLEFT", 10, yOffset)
+            yOffset = yOffset - raidData.frame:GetHeight()
+            
+            if raidData.characters and raidData.characters:IsShown() then
+                yOffset = yOffset - raidData.characters:GetHeight() - 3 -- Reduced gap between character frame and next raid
+            else
+                yOffset = yOffset - 3  -- Small gap when character frame is not shown
+            end
         end
     end
 end
 
--- Add this function to recreate raid frames based on current phase
 function CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings)
     -- Get current phase from settings
     local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 6
     print("CharacterManager: Recreating raid frames for Phase " .. currentPhase)
     
+    -- First, hide all existing frames in the tab
+    for _, child in pairs({tabFrames[3]:GetChildren()}) do
+        if child:GetName() ~= tabFrames[3]:GetName() then
+            child:Hide()
+        end
+    end
+    
     -- Clear existing raid frames if any
-    if raidFrames then
-        for _, raidData in ipairs(raidFrames) do
+    if _G.raidFrames then
+        for _, raidData in ipairs(_G.raidFrames) do
             if raidData.frame then
                 raidData.frame:Hide()
                 raidData.frame:SetParent(nil)
@@ -413,13 +440,17 @@ function CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSett
                 raidData.characters:SetParent(nil)
             end
         end
+        -- Clear the table
+        table.wipe(_G.raidFrames)
     end
     
     -- Create new raid frames based on current phase
-    raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
-    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
-    CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
+    local newRaidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(newRaidFrames, tabFrames)
+    CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(newRaidFrames)
     
-    return raidFrames
+    -- Update the global reference
+    _G.raidFrames = newRaidFrames
+    
+    return newRaidFrames
 end
-

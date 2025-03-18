@@ -66,10 +66,24 @@ end
 local function InitializeAddon()
     -- Initialize buff tracking module
     local buffTrackingFrame = CharacterManager_BuffTracking.Initialize(CharacterManager_TrackedBuffs, CharacterManager_CHRONOBOON_AURA_ID)
+    
+    -- Load character data
+    LoadCharacterData()
+    
+    -- Initialize settings if they don't exist
+    if not WoWCharacterManagerSettings then
+        WoWCharacterManagerSettings = {
+            currentPhase = 3,  -- Default to Phase 3
+            characters = {},
+            defaultBuffs = {}
+        }
+        print("CharacterManager: Created new settings with default Phase 3")
+    else
+        print("CharacterManager: Loaded existing settings with Phase " .. (WoWCharacterManagerSettings.currentPhase or "unknown"))
+    end
 
 
 end
-
 local function InitializeSettings()
     -- Nothing to initialize yet, but we'll keep this function for future use
 end
@@ -195,12 +209,6 @@ local function OnSpellCast(self, event, unit, _, spellID)
     end
 end
 
--- Function to create the settings tab content
-local function CreateSettingsTabContent()
-    -- Use the module function to create settings tab content
-    CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
-end
-
 -- First, define the original SaveCharacter function
 function SaveCharacter()
     local playerName = UnitName("player")
@@ -264,6 +272,7 @@ MyAddon:SetScript("OnEvent", function(self, event, ...)
         -- Initialize settings if they don't exist
         if not WoWCharacterManagerSettings then
             WoWCharacterManagerSettings = {
+                currentPhase = 3,  -- Default to Phase 3
                 characters = {},
                 defaultBuffs = {} -- Store default buff settings for new characters
             }
@@ -271,6 +280,16 @@ MyAddon:SetScript("OnEvent", function(self, event, ...)
             -- Set default buff settings (all buffs enabled by default)
             for _, buffInfo in ipairs(trackedBuffs) do
                 WoWCharacterManagerSettings.defaultBuffs[buffInfo.name] = true
+            end
+            
+            print("CharacterManager: Created new settings with default Phase 3")
+        else
+            -- Ensure currentPhase exists
+            if not WoWCharacterManagerSettings.currentPhase then
+                WoWCharacterManagerSettings.currentPhase = 3
+                print("CharacterManager: Added missing currentPhase setting (3)")
+            else
+                print("CharacterManager: Loaded existing settings with Phase " .. WoWCharacterManagerSettings.currentPhase)
             end
         end
         
@@ -280,10 +299,19 @@ MyAddon:SetScript("OnEvent", function(self, event, ...)
         UpdateAllRaidStatuses()
         CreateCooldownBars()
         InitializeSettings()
-        
-        -- Create settings tab content
-        CreateSettingsTabContent()
-        
+
+        -- Initialize raid frames with the current phase setting
+        if CharacterManager_RaidLockouts then
+            local currentPhase = WoWCharacterManagerSettings.currentPhase or 3
+            print("CharacterManager: Creating raid frames for Phase " .. currentPhase .. " during ADDON_LOADED")
+            raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+            CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+        end
+
+        if CharacterManager_Settings and CharacterManager_Settings.CreateSettingsTabContent then
+            CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
+        end
+
     elseif event == "PLAYER_ENTERING_WORLD" or event == "RAID_INSTANCE_WELCOME" or event == "UPDATE_INSTANCE_INFO" then
         SaveCharacter()
         UpdateAllRaidStatuses()
@@ -398,13 +426,28 @@ for i, tabName in ipairs(tabs) do
         if i == 2 then  -- Professions tab
             UpdateProfessionCooldowns()
         elseif i == 3 then  -- Raids tab
+            -- Add debug output for raid tab
+            local currentPhase = WoWCharacterManagerSettings and WoWCharacterManagerSettings.currentPhase or 3
+            print("CharacterManager: Raid tab clicked - Current Phase setting: " .. currentPhase)
+            
+            -- If raid frames don't exist, create them
+            if not raidFrames or #raidFrames == 0 then
+                print("CharacterManager: Raid frames not found, creating them now")
+                raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+                CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+            end
+            
             CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
+            
             if raidFrames then
+                print("CharacterManager: Number of raid frames: " .. #raidFrames)
                 for _, raidData in ipairs(raidFrames) do
                     if raidData.characters and raidData.characters:IsShown() then
                         raidData.populate(raidData.raidName)
                     end
                 end
+            else
+                print("CharacterManager: No raid frames found!")
             end
         elseif i == 4 then  -- Buffs tab
             CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
@@ -444,14 +487,7 @@ professionUpdateTimer:SetScript("OnUpdate", function(self, elapsed)
 end)
 -- Create raid frames using the module function
 -- Initialize raid frames with current phase setting
-if CharacterManager_RaidLockouts then
-    local currentPhase = WoWCharacterManagerSettings and WoWCharacterManagerSettings.currentPhase or 3
-    print("CharacterManager: Initial raid frame creation for Phase " .. currentPhase)
-    raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
-    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
-end
--- Update raid frames position
-CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+
 
 local function UpdateDisplay()
     if selectedTab == 3 then
@@ -480,6 +516,14 @@ updateTimer:SetScript("OnUpdate", function(self, elapsed)
     end
 end)
 
+if CharacterManager_Settings and CharacterManager_Settings.CreateSettingsTabContent then
+    CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
+end
+
+-- Set up the initial tab
+if _G["MyAddonTab" .. selectedTab] then
+    _G["MyAddonTab" .. selectedTab]:Click()
+end
 
 -- Minimap Button
 -- Update the minimap button code to use settings:

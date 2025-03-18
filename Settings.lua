@@ -36,8 +36,18 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         phaseLabel:SetPoint("TOPLEFT", generalTitle, "BOTTOMLEFT", 5, -15)
         phaseLabel:SetText("Game Phase:")
         
-        local phaseDropdown = CreateFrame("Frame", "CharacterManagerPhaseDropdown", generalSettingsContainer, "UIDropDownMenuTemplate")
-        phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+        -- Check if the dropdown already exists
+        local phaseDropdown = _G["CharacterManagerPhaseDropdown"]
+        if not phaseDropdown then
+            phaseDropdown = CreateFrame("Frame", "CharacterManagerPhaseDropdown", generalSettingsContainer, "UIDropDownMenuTemplate")
+            phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+        else
+            -- If it exists, just reparent and reposition it
+            phaseDropdown:SetParent(generalSettingsContainer)
+            phaseDropdown:ClearAllPoints()
+            phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+            phaseDropdown:Show()
+        end
         
         local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
         
@@ -245,7 +255,6 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
 end
 
 -- Update character-specific settings display
--- Update character-specific settings display
 function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, characterName, anchorFrame)
     -- Remove any existing character settings
     if settingsFrame.characterSettings then
@@ -333,7 +342,7 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
             
             -- Update buff display if on the buff tab
             if CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
-                CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+                CharacterManager_BuffTracking.UpdateBuffDisplay(_G.tabFrames, MyAddonDB, WoWCharacterManagerSettings)
             end
         end)
         
@@ -348,13 +357,32 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
     defaultButton:SetText("Set as Default")
     defaultButton:SetScript("OnClick", function()
         -- Copy current character settings to default
+        if not WoWCharacterManagerSettings.defaultBuffs then
+            WoWCharacterManagerSettings.defaultBuffs = {}
+        end
+        
         for _, buffInfo in ipairs(CharacterManager_TrackedBuffs) do
             local buffName = buffInfo.name
             WoWCharacterManagerSettings.defaultBuffs[buffName] = 
                 WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] or false
         end
         print("Default buff settings updated based on " .. characterName)
-    end)
+        
+        -- Check if there are duplicate phase dropdowns
+        local count = 0
+        local phaseDropdown = _G["CharacterManagerPhaseDropdown"]
+        if phaseDropdown then
+            count = 1
+            print("Found phase dropdown: " .. phaseDropdown:GetName())
+            
+            -- Check if the dropdown has multiple parents
+            local parent = phaseDropdown:GetParent()
+            if parent then
+                print("Phase dropdown parent: " .. (parent:GetName() or "unnamed frame"))
+            end
+        end
+        print("Number of phase dropdowns found: " .. count)
+    end)  -- Added the missing closing parenthesis here
     
     -- Add "Apply to All" button
     local applyAllButton = CreateFrame("Button", nil, settingsContainer, "UIPanelButtonTemplate")
@@ -374,7 +402,7 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
         
         -- Update buff display if on the buff tab
         if CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
-            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+            CharacterManager_BuffTracking.UpdateBuffDisplay(_G.tabFrames, MyAddonDB, WoWCharacterManagerSettings)
         end
     end)
     
