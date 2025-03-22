@@ -44,7 +44,12 @@ CharacterManager_ClassColors = {
     ["DRUID"] = "|cFFFF7D0A"
 }
 
--- Constants.lua
+
+CharacterManager_PROFESSIONS_TO_TRACK = {
+    "Alchemy",
+    "Leatherworking",
+    "Tailoring"
+}
 
 -- Define profession cooldowns data
 CharacterManager_ProfessionCooldownsData = {

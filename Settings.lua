@@ -3,106 +3,175 @@
 
 CharacterManager_Settings = {}
 
--- Create the settings tab content
+function CharacterManager_Settings.AdjustCharacterSettingsContainerHeight(container)
+    local bottomPoint = 0
+    local debugInfo = {}
+    
+    -- Function to recursively check all child frames
+    local function checkFrame(frame, depth, accumulatedY)
+        if frame:IsVisible() then
+            local point, relativeTo, relativePoint, xOffset, yOffset = frame:GetPoint()
+            local height = frame:GetHeight()
+            
+            -- Calculate absolute Y position
+            local absoluteY
+            if relativeTo then
+                -- If the frame is positioned relative to another frame
+                local _, parentY = relativeTo:GetCenter()
+                local _, frameY = frame:GetCenter()
+                absoluteY = accumulatedY + (parentY - frameY)
+            else
+                -- If the frame is positioned relative to its parent
+                absoluteY = accumulatedY + (yOffset or 0)
+            end
+            
+            local childBottom = math.abs(absoluteY) + height
+            bottomPoint = math.max(bottomPoint, childBottom)
+            
+            -- Check children of this frame
+            for _, child in ipairs({frame:GetChildren()}) do
+                checkFrame(child, depth + 1, absoluteY)
+            end
+        end
+    end
+    
+    -- Check all direct children of the container
+    for _, child in ipairs({container:GetChildren()}) do
+        checkFrame(child, 0, 0)
+    end
+    
+    -- Add padding
+    bottomPoint = bottomPoint + 60
+    
+    -- Set minimum height
+    bottomPoint = math.max(bottomPoint, 100)  -- Adjust this value as needed
+    container:SetHeight(bottomPoint)
+end
+
 function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
+    print("Debug: Entering CreateSettingsTabContent function")
         local settingsFrame = tabFrames[6]  -- Settings is the 6th tab
-        if not settingsFrame then return end
-        
-        -- Title
-        local title = settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-        title:SetPoint("TOPLEFT", 20, -20)
-        title:SetText("Settings")
-        
-        -- General Settings Section with background
-        local generalSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
-        generalSettingsContainer:SetSize(360, 120)
-        generalSettingsContainer:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -10)
-        generalSettingsContainer:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile = true,
-            tileSize = 32,
-            edgeSize = 16,
-            insets = { left = 5, right = 5, top = 5, bottom = 5 }
-        })
-        
+        if not settingsFrame then 
+            print("Debug: settingsFrame is nil, exiting CreateSettingsTabContent")
+            return 
+        end
+
+    -- Clear existing content
+    for _, child in pairs({settingsFrame:GetChildren()}) do
+        child:Hide()
+        child:SetParent(nil)
+    end
+
+    -- Create a ScrollFrame for the entire settings content
+    local scrollFrame = CreateFrame("ScrollFrame", nil, settingsFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", settingsFrame, "TOPLEFT", 5, -25)
+    scrollFrame:SetPoint("BOTTOMRIGHT", settingsFrame, "BOTTOMRIGHT", -25, 5)
+
+    -- Create a content frame to hold all settings
+    local contentFrame = CreateFrame("Frame", nil, scrollFrame)
+    contentFrame:SetSize(scrollFrame:GetWidth() - 20, 600)  -- Set an initial height, adjust width
+    scrollFrame:SetScrollChild(contentFrame)
+
+    -- Adjust the width of the containers to fit within the scrollable area
+    local containerWidth = contentFrame:GetWidth() - 10  -- Leave some padding
+    -- General Settings Section with background
+    local generalSettingsContainer = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
+    generalSettingsContainer:SetSize(containerWidth, 120)
+    generalSettingsContainer:SetPoint("TOPLEFT", contentFrame, "TOPLEFT", 10, -10)
+    generalSettingsContainer:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 16,
+        insets = { left = 5, right = 5, top = 5, bottom = 5 }
+    })
+
+    -------------------
+    -- General Settings Section
+    -------------------
+
         -- General Settings Section Title
         local generalTitle = generalSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         generalTitle:SetPoint("TOPLEFT", 15, -15)
         generalTitle:SetText("General Settings")
-        
-        -- Phase dropdown
+
+        -- Phase dropdown label and dropdown on the same line
         local phaseLabel = generalSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
         phaseLabel:SetPoint("TOPLEFT", generalTitle, "BOTTOMLEFT", 5, -15)
         phaseLabel:SetText("Game Phase:")
-        
+
         -- Check if the dropdown already exists
         local phaseDropdown = _G["CharacterManagerPhaseDropdown"]
         if not phaseDropdown then
             phaseDropdown = CreateFrame("Frame", "CharacterManagerPhaseDropdown", generalSettingsContainer, "UIDropDownMenuTemplate")
-            phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+            phaseDropdown:SetPoint("LEFT", phaseLabel, "RIGHT", 10, -5)  -- Adjusted to be on the same line
         else
             -- If it exists, just reparent and reposition it
             phaseDropdown:SetParent(generalSettingsContainer)
             phaseDropdown:ClearAllPoints()
-            phaseDropdown:SetPoint("TOPLEFT", phaseLabel, "BOTTOMLEFT", -15, -5)
+            phaseDropdown:SetPoint("LEFT", phaseLabel, "RIGHT", 10, -5)  -- Adjusted to be on the same line
             phaseDropdown:Show()
         end
-        
-        local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
-        
-        -- Ensure WoWCharacterManagerSettings exists
-        if not WoWCharacterManagerSettings then
-            WoWCharacterManagerSettings = {
-                currentPhase = 3  -- Default to Phase 3
-            }
-        elseif not WoWCharacterManagerSettings.currentPhase then
-            WoWCharacterManagerSettings.currentPhase = 3  -- Default to Phase 3
+
+    local phases = {"Phase 1", "Phase 2", "Phase 3", "Phase 4", "Phase 5", "Phase 6"}
+
+    -- Ensure WoWCharacterManagerSettings exists
+    if not WoWCharacterManagerSettings then
+        WoWCharacterManagerSettings = {
+            currentPhase = 3  -- Default to Phase 3
+        }
+    elseif not WoWCharacterManagerSettings.currentPhase then
+        WoWCharacterManagerSettings.currentPhase = 3  -- Default to Phase 3
+    end
+
+    local currentPhase = WoWCharacterManagerSettings.currentPhase
+
+    UIDropDownMenu_Initialize(phaseDropdown, function(self, level)
+        local info = UIDropDownMenu_CreateInfo()
+        info.func = function(self)
+            currentPhase = self.value
+            UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase])
+
+            -- Save the setting to the global settings variable
+            WoWCharacterManagerSettings.currentPhase = currentPhase
+
+            -- Print debug message
+            print("CharacterManager: Phase changed to " .. phases[currentPhase] .. " (Phase ID: " .. currentPhase .. ")")
+
+            -- Update raid frames based on new phase, but don't show them unless on raid tab
+            if CharacterManager_RaidLockouts and CharacterManager_RaidLockouts.RecreateRaidFrames then
+                print("CharacterManager: Recreating raid frames for new phase...")
+                _G.raidFrames = CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, WoWCharacterManagerSettings, selectedTab == 3)
+            else
+                print("CharacterManager: ERROR - Could not recreate raid frames (function not found)")
+            end
+
+            -- Update buff display if on the buff tab
+            if tabFrames and tabFrames[4] and CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
+                print("CharacterManager: Updating buff display for new phase...")
+                CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+            end
         end
-        
-        local currentPhase = WoWCharacterManagerSettings.currentPhase
-        
-        UIDropDownMenu_Initialize(phaseDropdown, function(self, level)
-            local info = UIDropDownMenu_CreateInfo()
-            info.func = function(self)
-                currentPhase = self.value
-                UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase])
-                
-                -- Save the setting to the global settings variable
-                WoWCharacterManagerSettings.currentPhase = currentPhase
-                
-                -- Print debug message
-                print("CharacterManager: Phase changed to " .. phases[currentPhase] .. " (Phase ID: " .. currentPhase .. ")")
-                
-                -- Update raid frames based on new phase
-                if CharacterManager_RaidLockouts and CharacterManager_RaidLockouts.RecreateRaidFrames then
-                    print("CharacterManager: Recreating raid frames for new phase...")
-                    raidFrames = CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, WoWCharacterManagerSettings)
-                else
-                    print("CharacterManager: ERROR - Could not recreate raid frames (function not found)")
-                end
-                
-                -- Update buff display if on the buff tab
-                if tabFrames and tabFrames[4] and CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
-                    print("CharacterManager: Updating buff display for new phase...")
-                    CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
-                end
-            end
-            
-            for i, phaseName in ipairs(phases) do
-                info.text = phaseName
-                info.value = i
-                info.checked = (currentPhase == i)
-                UIDropDownMenu_AddButton(info, level)
-            end
-        end)
-        
-        UIDropDownMenu_SetWidth(phaseDropdown, 100)
-        UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 3")
-        
-        -- Debug Tools Section with background
-        local debugSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
-        debugSettingsContainer:SetSize(360, 100)
+
+
+        for i, phaseName in ipairs(phases) do
+            info.text = phaseName
+            info.value = i
+            info.checked = (currentPhase == i)
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+
+    UIDropDownMenu_SetWidth(phaseDropdown, 100)
+    UIDropDownMenu_SetText(phaseDropdown, phases[currentPhase] or "Phase 3")
+
+    -------------------
+    -- Debug Section
+    -------------------
+
+        local debugSettingsContainer = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
+        debugSettingsContainer:SetSize(containerWidth, 130)
         debugSettingsContainer:SetPoint("TOPLEFT", generalSettingsContainer, "BOTTOMLEFT", 0, -20)
         debugSettingsContainer:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -112,12 +181,12 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
             edgeSize = 16,
             insets = { left = 5, right = 5, top = 5, bottom = 5 }
         })
-        
+
         -- Debug Tools Section Title
         local debugTitle = debugSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         debugTitle:SetPoint("TOPLEFT", 15, -15)
         debugTitle:SetText("Debug Tools")
-        
+
         -- Create a button to clear profession cooldowns
         local clearCooldownsButton = CreateFrame("Button", nil, debugSettingsContainer, "UIPanelButtonTemplate")
         clearCooldownsButton:SetSize(200, 24)
@@ -133,13 +202,13 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
                 end
             end
             print("Cleared profession cooldowns for " .. count .. " characters.")
-            
+
             -- Update the cooldown display if the function exists
             if _G.UpdateProfessionCooldowns then
                 _G.UpdateProfessionCooldowns()
             end
         end)
-        
+
         -- Add a tooltip to explain what the button does
         clearCooldownsButton:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -150,7 +219,7 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         clearCooldownsButton:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
         end)
-        
+
         -- Debug Buffs Button
         local debugBuffsButton = CreateFrame("Button", nil, debugSettingsContainer, "UIPanelButtonTemplate")
         debugBuffsButton:SetSize(120, 24)
@@ -170,7 +239,7 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
                 else
                     print("  No active buffs")
                 end
-                
+
                 if charData.chronoboon then
                     print("  Chronoboon Buffs:")
                     for slot, value in pairs(charData.chronoboon) do
@@ -181,7 +250,7 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
                 end
             end
         end)
-        
+
         -- Add a tooltip to explain what the button does
         debugBuffsButton:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -192,10 +261,13 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
         debugBuffsButton:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
         end)
-        
-        -- Character-specific Settings Section with background
-        local characterSettingsContainer = CreateFrame("Frame", nil, settingsFrame, "BackdropTemplate")
-        characterSettingsContainer:SetSize(360, 200)
+
+        -------------------
+        -- Character-specific Settings Section
+        -------------------
+
+        local characterSettingsContainer = CreateFrame("Frame", nil, contentFrame, "BackdropTemplate")
+        characterSettingsContainer:SetSize(containerWidth, 450)  -- Initial height, will be adjusted
         characterSettingsContainer:SetPoint("TOPLEFT", debugSettingsContainer, "BOTTOMLEFT", 0, -20)
         characterSettingsContainer:SetBackdrop({
             bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -205,53 +277,107 @@ function CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
             edgeSize = 16,
             insets = { left = 5, right = 5, top = 5, bottom = 5 }
         })
-        
+
         -- Character-specific Settings Section Title
         local characterTitle = characterSettingsContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         characterTitle:SetPoint("TOPLEFT", 15, -15)
         characterTitle:SetText("Character-Specific Settings")
-        
-        -- Character dropdown
+
+        -- Create character dropdown
         local characterDropdown = CreateFrame("Frame", "CharacterManagerSettingsDropdown", characterSettingsContainer, "UIDropDownMenuTemplate")
         characterDropdown:SetPoint("TOPLEFT", characterTitle, "BOTTOMLEFT", -15, -10)
         
         local selectedCharacter = nil
         
         local function UpdateCharacterDropdown()
+            print("Debug: Entering UpdateCharacterDropdown function")
             local characters = {}
             for fullName, _ in pairs(MyAddonDB) do
                 table.insert(characters, fullName)
             end
             table.sort(characters)
-            
-            UIDropDownMenu_Initialize(characterDropdown, function(self, level)
+            print("Debug: Found " .. #characters .. " characters")
+        
+            -- Get the current character's name with realm, ensuring proper formatting
+            local currentCharacter = UnitName("player") .. " - " .. GetRealmName()
+            print("Debug: Current character is " .. currentCharacter)
+        
+            -- Only set the initial selected character if it hasn't been set yet
+            if not selectedCharacter then
+                selectedCharacter = currentCharacter
+                print("Debug: Initially selected character set to " .. selectedCharacter)
+            else
+                print("Debug: Selected character already set to " .. selectedCharacter)
+            end
+        
+            local function OnClick(self)
+                selectedCharacter = self.value
+                print("Debug: Character selected: " .. selectedCharacter)
+                UIDropDownMenu_SetText(characterDropdown, selectedCharacter)
+                -- Update character-specific settings display
+                CharacterManager_Settings.UpdateCharacterSettings(characterSettingsContainer, selectedCharacter, characterDropdown)
+            end
+        
+            local function Initialize(self, level)
+                print("Debug: Initializing dropdown menu")
                 local info = UIDropDownMenu_CreateInfo()
-                info.func = function(self)
-                    selectedCharacter = self.value
-                    UIDropDownMenu_SetText(characterDropdown, selectedCharacter)
-                    -- Update character-specific settings display
-                    CharacterManager_Settings.UpdateCharacterSettings(characterSettingsContainer, selectedCharacter, characterDropdown)
-                end
-                
+                info.func = OnClick
+        
                 for _, charName in ipairs(characters) do
                     info.text = charName
                     info.value = charName
-                    info.checked = (selectedCharacter == charName)
+                    info.checked = (charName == selectedCharacter)
                     UIDropDownMenu_AddButton(info, level)
                 end
-            end)
-            
-            if #characters > 0 and not selectedCharacter then
-                selectedCharacter = characters[1]
+            end
+        
+            UIDropDownMenu_Initialize(characterDropdown, Initialize)
+        
+            -- Set the width to accommodate longer names
+            UIDropDownMenu_SetWidth(characterDropdown, 200)
+        
+            if #characters > 0 then
+                print("Debug: Characters found, setting up dropdown")
+                -- Check if the selected character is in the list
+                if not tContains(characters, selectedCharacter) then
+                    print("Debug: Selected character " .. selectedCharacter .. " not found in list")
+                    -- If the current character is in the list, use it; otherwise, use the first character
+                    if tContains(characters, currentCharacter) then
+                        selectedCharacter = currentCharacter
+                        print("Debug: Switching to current character: " .. selectedCharacter)
+                    else
+                        selectedCharacter = characters[1]
+                        print("Debug: Switching to first character in list: " .. selectedCharacter)
+                    end
+                else
+                    print("Debug: Selected character " .. selectedCharacter .. " found in list")
+                end
                 UIDropDownMenu_SetText(characterDropdown, selectedCharacter)
+                print("Debug: Dropdown text set to " .. selectedCharacter)
                 -- Initialize character settings display
                 CharacterManager_Settings.UpdateCharacterSettings(characterSettingsContainer, selectedCharacter, characterDropdown)
             else
-                UIDropDownMenu_SetText(characterDropdown, selectedCharacter or "Select Character")
+                print("Debug: No characters found")
+                UIDropDownMenu_SetText(characterDropdown, "No characters")
             end
+            print("Debug: Exiting UpdateCharacterDropdown function")
         end
         
+        print("Debug: Before calling UpdateCharacterDropdown")
         UpdateCharacterDropdown()
+        print("Debug: After calling UpdateCharacterDropdown")
+        
+        characterSettingsContainer:SetScript("OnShow", function()
+            print("Debug: characterSettingsContainer OnShow triggered")
+            CharacterManager_Settings.AdjustCharacterSettingsContainerHeight(characterSettingsContainer)
+        end)
+        
+        -- Set OnShow script to refresh content when tab is shown
+        settingsFrame:SetScript("OnShow", function()
+            print("Debug: settingsFrame OnShow triggered")
+            -- We'll add refresh logic here later
+        end)
+
 end
 
 -- Update character-specific settings display
@@ -335,14 +461,20 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
         local isEnabled = WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName]
         checkbox:SetChecked(isEnabled)
         
-        -- Handle checkbox changes
         checkbox:SetScript("OnClick", function(self)
             local checked = self:GetChecked()
             WoWCharacterManagerSettings.characters[characterName].trackedBuffs[buffName] = checked
             
             -- Update buff display if on the buff tab
             if CharacterManager_BuffTracking and CharacterManager_BuffTracking.UpdateBuffDisplay then
-                CharacterManager_BuffTracking.UpdateBuffDisplay(_G.tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+                -- Use C_Timer.After to ensure tabFrames is available
+                C_Timer.After(0, function()
+                    if _G.tabFrames then
+                        CharacterManager_BuffTracking.UpdateBuffDisplay(_G.tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+                    else
+                        print("Error: tabFrames is not available")
+                    end
+                end)
             end
         end)
         
@@ -405,7 +537,7 @@ function CharacterManager_Settings.UpdateCharacterSettings(settingsFrame, charac
             CharacterManager_BuffTracking.UpdateBuffDisplay(_G.tabFrames, MyAddonDB, WoWCharacterManagerSettings)
         end
     end)
-    
-    -- Adjust container height based on content
-    settingsContainer:SetHeight(math.abs(yOffset) + 50)  -- Add some padding
+    C_Timer.After(0.1, function()
+        CharacterManager_Settings.AdjustCharacterSettingsContainerHeight(settingsFrame)
+    end)
 end

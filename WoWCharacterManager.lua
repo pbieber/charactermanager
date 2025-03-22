@@ -10,6 +10,10 @@ MyAddon.title = MyAddon:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 MyAddon.title:SetPoint("TOP", 0, -5)
 MyAddon.title:SetText("Character Manager")
 
+local tabWidth = 120
+local tabHeight = 32
+local tabSpacing = 6
+local selectedTab = 2  -- Default to Professions tab
 
 -- Initializations
 characters = {}
@@ -21,6 +25,8 @@ local buffCheckboxes = {}
 local buffSettingsContainer = nil
 local cooldownDebugText = nil
 CharacterManager_ProfessionCooldowns = CharacterManager_ProfessionCooldowns or {}
+
+
 
 -- Getting Constants
 local raids = CharacterManager_Raids
@@ -43,6 +49,75 @@ local SpellsToTrack = CharacterManager_ProfessionCooldowns.SpellsToTrack
 -- Start of addon
 ------------------------
 
+local function UpdateProfessionCooldowns()
+    -- Use the module function to update cooldown bars
+    CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldownBars, MyAddonDB, cooldownDebugText)
+end
+
+
+local function UpdateUIBasedOnSelectedTab()
+    if selectedTab == 2 then
+        UpdateProfessionCooldowns()
+    elseif selectedTab == 3 and raidFrames then
+        for _, raidData in ipairs(raidFrames) do
+            if raidData.characters and raidData.characters:IsShown() then
+                raidData.populate(raidData.raidName)
+            end
+        end
+    elseif selectedTab == 4 then
+        CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+    end
+end
+
+local function SetTabState(tab, isSelected)
+    if isSelected then
+        tab.bg:SetColorTexture(0.8, 0.1, 0.1, 1)
+        tab.text:SetTextColor(1, 1, 1)
+    else
+        tab.bg:SetColorTexture(0.2, 0.2, 0.2, 1)
+        tab.text:SetTextColor(0.8, 0.8, 0.8)
+    end
+end
+local function SelectTab(index)
+    selectedTab = index
+    for i, frame in ipairs(tabFrames) do
+        if frame then frame:Hide() end
+        SetTabState(_G["MyAddonTab" .. i], i == index)
+    end
+    if tabFrames[index] then
+        tabFrames[index]:Show()
+    end
+
+    -- Handle raid frames visibility
+    if index == 3 then  -- Raids tab
+        if _G.raidFrames then
+            for _, raidData in ipairs(_G.raidFrames) do
+                if raidData.frame then
+                    raidData.frame:Show()
+                end
+            end
+            CharacterManager_RaidLockouts.UpdateRaidFramesPosition(_G.raidFrames, tabFrames)
+            CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(_G.raidFrames)
+        else
+            -- Recreate raid frames if they don't exist
+            CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, WoWCharacterManagerSettings, true)
+        end
+    else
+        -- Hide raid frames when not on the Raids tab
+        if _G.raidFrames then
+            for _, raidData in ipairs(_G.raidFrames) do
+                if raidData.frame then
+                    raidData.frame:Hide()
+                end
+                if raidData.characters then
+                    raidData.characters:Hide()
+                end
+            end
+        end
+    end
+
+    UpdateUIBasedOnSelectedTab()
+end
 
 local function FormatTime(seconds)
     if seconds <= 0 then
@@ -63,67 +138,16 @@ local function LoadCharacterData()
     characters = MyAddonDB  -- Assign global storage
 end
 
-local function InitializeAddon()
-    -- Initialize buff tracking module
-    local buffTrackingFrame = CharacterManager_BuffTracking.Initialize(CharacterManager_TrackedBuffs, CharacterManager_CHRONOBOON_AURA_ID)
-    
-    -- Load character data
-    LoadCharacterData()
-    
-    -- Initialize settings if they don't exist
-    if not WoWCharacterManagerSettings then
-        WoWCharacterManagerSettings = {
-            currentPhase = 3,  -- Default to Phase 3
-            characters = {},
-            defaultBuffs = {}
-        }
-        print("CharacterManager: Created new settings with default Phase 3")
-    else
-        print("CharacterManager: Loaded existing settings with Phase " .. (WoWCharacterManagerSettings.currentPhase or "unknown"))
-    end
-
-
-end
-local function InitializeSettings()
-    -- Nothing to initialize yet, but we'll keep this function for future use
-end
-
-InitializeAddon()
-------------------------
----- To-dos Tab
-------------------------
-
--- Not implemented yet
-
-
-------------------------
----- Professions Tab
-------------------------
-local function GetTrackedSpellIDs()
-    return CharacterManager_ProfessionCooldowns.GetTrackedSpellIDs()
-end
-
-
-local function CreateCooldownBars()
-    -- Use the module function to create cooldown bars
-    cooldownBars, cooldownDebugText = CharacterManager_ProfessionCooldowns.CreateCooldownBars(tabFrames[2])
-end
-
-local function UpdateProfessionCooldowns()
-    -- Use the module function to update cooldown bars
-    CharacterManager_ProfessionCooldowns.UpdateProfessionCooldowns(cooldownBars, MyAddonDB, cooldownDebugText)
-end
-
-local function FormatTimeMinutes(seconds)
-    local minutes = math.floor(seconds / 60)
-    return string.format("%d min", minutes)
-end
-
 local function CheckProfessionsAndSpells()
     local playerName = UnitName("player")
     local realmName = GetRealmName()
     local fullName = playerName .. " - " .. realmName
     
+    -- Initialize the characters table if it's nil
+    if not characters then
+        characters = {}
+    end
+
     -- Use the new module function to check professions
     CharacterManager_ProfessionCooldowns.CheckProfessionsAndSpells(characters, fullName)
     
@@ -132,16 +156,155 @@ local function CheckProfessionsAndSpells()
 
 end
 
-local function SaveProfessionCooldowns()
+local function UpdateCooldowns()
     local playerName = UnitName("player")
     local realmName = GetRealmName()
     local fullName = playerName .. " - " .. realmName
+        -- Initialize the characters table if it's nil
+        if not characters then
+            characters = {}
+        end
     
     -- Use the new module function to save cooldowns
-    CharacterManager_ProfessionCooldowns.SaveProfessionCooldowns(characters, fullName)
+    CharacterManager_ProfessionCooldowns.UpdateCooldowns(characters, fullName)
     
     MyAddonDB = characters
 end
+
+function SaveCharacter()
+    local playerName = UnitName("player")
+    local realmName = GetRealmName()
+    local fullName = playerName .. " - " .. realmName
+    local _, class = UnitClass("player")
+    local level = UnitLevel("player")
+
+    if not characters[fullName] then
+        characters[fullName] = { 
+            name = playerName, 
+            class = class, 
+            level = level, 
+            raidStatus = {} 
+        }
+    else
+        characters[fullName].class = class  -- Update class in case of class change
+        characters[fullName].level = level  -- Update level
+        if not characters[fullName].raidStatus then
+            characters[fullName].raidStatus = {}
+        end
+    end
+
+    for _, raidName in ipairs(raids) do
+        local status, reset, progress, total = GetRaidLockoutStatus(raidName)
+        characters[fullName].raidStatus[raidName] = {
+            status = status,
+            reset = reset,
+            progress = progress,
+            total = total,
+            lastUpdated = time()
+        }
+    end
+    characters[fullName].buffs = {}
+    for _, buffInfo in ipairs(trackedBuffs) do
+        for _, spellId in ipairs(buffInfo.spellIds) do
+            local name, _, _, _, duration, expirationTime = AuraUtil.FindAuraByName(GetSpellInfo(spellId), "player")
+            if name then
+                characters[fullName].buffs[buffInfo.name] = {
+                    status = "Active",
+                    remainingTime = expirationTime - GetTime()
+                }
+                break
+            end
+        end
+    end
+    print("Character saved:", fullName)
+    MyAddonDB = characters
+    
+    UpdateCooldowns()
+    CheckProfessionsAndSpells()
+end
+
+local function GetTrackedSpellIDs()
+    return CharacterManager_ProfessionCooldowns.GetTrackedSpellIDs()
+end
+
+local function CreateCooldownBars()
+    -- Use the module function to create cooldown bars
+    cooldownBars, cooldownDebugText = CharacterManager_ProfessionCooldowns.CreateCooldownBars(tabFrames[2])
+end
+
+local function FormatTimeMinutes(seconds)
+    local minutes = math.floor(seconds / 60)
+    return string.format("%d min", minutes)
+end
+
+local function InitializeAddon()
+    -- Initialize buff tracking module
+    local buffTrackingFrame = CharacterManager_BuffTracking.Initialize(CharacterManager_TrackedBuffs, CharacterManager_CHRONOBOON_AURA_ID)
+    
+    -- Load character data
+    LoadCharacterData()
+    
+    -- Initialize or load settings
+    if not WoWCharacterManagerSettings then
+        WoWCharacterManagerSettings = {
+            currentPhase = 3,  -- Default to Phase 3
+            characters = {},
+            defaultBuffs = {}
+        }
+        -- Set default buff settings (all buffs enabled by default)
+        for _, buffInfo in ipairs(trackedBuffs) do
+            WoWCharacterManagerSettings.defaultBuffs[buffInfo.name] = true
+        end
+        print("CharacterManager: Created new settings with default Phase 3")
+    else
+        -- Ensure currentPhase exists
+        WoWCharacterManagerSettings.currentPhase = WoWCharacterManagerSettings.currentPhase or 3
+        print("CharacterManager: Loaded existing settings with Phase " .. WoWCharacterManagerSettings.currentPhase)
+    end
+
+    -- Initialize other components
+    CheckProfessionsAndSpells()
+    UpdateProfessionCooldowns()
+    UpdateAllRaidStatuses()
+    CreateCooldownBars()
+
+    -- Initialize raid frames with the current phase setting
+    if CharacterManager_RaidLockouts then
+        local currentPhase = WoWCharacterManagerSettings.currentPhase
+        print("CharacterManager: Creating raid frames for Phase " .. currentPhase)
+        raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
+        CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
+    end
+
+    if CharacterManager_Settings and CharacterManager_Settings.CreateSettingsTabContent then
+        CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
+    end
+end
+
+local function InitializeSettings()
+    -- Nothing to initialize yet, but we'll keep this function for future use
+end
+
+
+local function OnAddonLoaded()
+    print("WoWCharacter Manager Loaded")
+    InitializeAddon()
+end
+
+local function OnPlayerEnteringWorld()
+    SaveCharacter()
+    UpdateAllRaidStatuses()
+    UpdateUIBasedOnSelectedTab()
+end
+
+
+------------------------
+---- To-dos Tab
+------------------------
+
+------------------------
+---- Professions Tab
+------------------------
 
 ------------------------
 ---- Raids Tab
@@ -209,125 +372,13 @@ local function OnSpellCast(self, event, unit, _, spellID)
     end
 end
 
--- First, define the original SaveCharacter function
-function SaveCharacter()
-    local playerName = UnitName("player")
-    local realmName = GetRealmName()
-    local fullName = playerName .. " - " .. realmName
-    local _, class = UnitClass("player")
-    local level = UnitLevel("player")
 
-    if not characters[fullName] then
-        characters[fullName] = { 
-            name = playerName, 
-            class = class, 
-            level = level, 
-            raidStatus = {} 
-        }
-    else
-        characters[fullName].class = class  -- Update class in case of class change
-        characters[fullName].level = level  -- Update level
-        if not characters[fullName].raidStatus then
-            characters[fullName].raidStatus = {}
-        end
-    end
 
-    for _, raidName in ipairs(raids) do
-        local status, reset, progress, total = GetRaidLockoutStatus(raidName)
-        characters[fullName].raidStatus[raidName] = {
-            status = status,
-            reset = reset,
-            progress = progress,
-            total = total,
-            lastUpdated = time()
-        }
-    end
-    characters[fullName].buffs = {}
-    for _, buffInfo in ipairs(trackedBuffs) do
-        for _, spellId in ipairs(buffInfo.spellIds) do
-            local name, _, _, _, duration, expirationTime = AuraUtil.FindAuraByName(GetSpellInfo(spellId), "player")
-            if name then
-                characters[fullName].buffs[buffInfo.name] = {
-                    status = "Active",
-                    remainingTime = expirationTime - GetTime()
-                }
-                break
-            end
-        end
-    end
-    print("Character saved:", fullName)
-    MyAddonDB = characters
-    
-    -- Add these lines to handle profession cooldowns directly in the main SaveCharacter function
-    -- instead of trying to override it
-    SaveProfessionCooldowns()
-    CheckProfessionsAndSpells()
-end
-
--- Update the ADDON_LOADED event handler
 MyAddon:SetScript("OnEvent", function(self, event, ...)
     if event == "ADDON_LOADED" and ... == "CharacterManager" then
-        print("WoWCharacter Manager Loaded")
-        
-        -- Initialize settings if they don't exist
-        if not WoWCharacterManagerSettings then
-            WoWCharacterManagerSettings = {
-                currentPhase = 3,  -- Default to Phase 3
-                characters = {},
-                defaultBuffs = {} -- Store default buff settings for new characters
-            }
-            
-            -- Set default buff settings (all buffs enabled by default)
-            for _, buffInfo in ipairs(trackedBuffs) do
-                WoWCharacterManagerSettings.defaultBuffs[buffInfo.name] = true
-            end
-            
-            print("CharacterManager: Created new settings with default Phase 3")
-        else
-            -- Ensure currentPhase exists
-            if not WoWCharacterManagerSettings.currentPhase then
-                WoWCharacterManagerSettings.currentPhase = 3
-                print("CharacterManager: Added missing currentPhase setting (3)")
-            else
-                print("CharacterManager: Loaded existing settings with Phase " .. WoWCharacterManagerSettings.currentPhase)
-            end
-        end
-        
-        LoadCharacterData()
-        CheckProfessionsAndSpells()
-        UpdateProfessionCooldowns()
-        UpdateAllRaidStatuses()
-        CreateCooldownBars()
-        InitializeSettings()
-
-        -- Initialize raid frames with the current phase setting
-        if CharacterManager_RaidLockouts then
-            local currentPhase = WoWCharacterManagerSettings.currentPhase or 3
-            print("CharacterManager: Creating raid frames for Phase " .. currentPhase .. " during ADDON_LOADED")
-            raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
-            CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
-        end
-
-        if CharacterManager_Settings and CharacterManager_Settings.CreateSettingsTabContent then
-            CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
-        end
-
+        OnAddonLoaded()
     elseif event == "PLAYER_ENTERING_WORLD" or event == "RAID_INSTANCE_WELCOME" or event == "UPDATE_INSTANCE_INFO" then
-        SaveCharacter()
-        UpdateAllRaidStatuses()
-
-        -- Update UI based on the selected tab
-        if selectedTab == 2 then
-            UpdateProfessionCooldowns()
-        elseif selectedTab == 3 then
-            if raidFrames then  -- Check if raidFrames exists
-                for _, raidData in ipairs(raidFrames) do
-                    if raidData.characters and raidData.characters:IsShown() then
-                        raidData.populate(raidData.raidName)
-                    end
-                end
-            end
-        end
+        OnPlayerEnteringWorld()
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         OnSpellCast(self, event, ...)
     end
@@ -344,23 +395,6 @@ MyAddon:RegisterEvent("UPDATE_INSTANCE_INFO")
 MyAddon:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 
 
-local tabWidth = 100
-local tabHeight = 24
-local tabSpacing = -5  -- Adjust spacing to fit nicely
-
--- Create Tabs
-local tabs = {"To-dos", "Professions", "Raids", "Buffs", "Consumes", "Settings"}
-local selectedTab = 2
-
--- Ensure tabFrames is defined
-if not tabFrames then
-    tabFrames = {}
-end
-
-local tabWidth = 120
-local tabHeight = 32
-local tabSpacing = 6
-
 -- Create a container for the tabs on the left
 local tabContainer = CreateFrame("Frame", nil, MyAddon)
 tabContainer:SetPoint("TOPRIGHT", MyAddon, "TOPLEFT", -2, 0)
@@ -372,121 +406,60 @@ local tabBg = tabContainer:CreateTexture(nil, "BACKGROUND")
 tabBg:SetAllPoints(tabContainer)
 tabBg:SetColorTexture(0.1, 0.1, 0.1, 0.9) -- Dark semi-transparent background
 
-for i, tabName in ipairs(tabs) do
-    local tab = CreateFrame("Button", "MyAddonTab" .. i, tabContainer)
-    tab:SetSize(tabWidth, tabHeight)
-    
-    -- Attach buttons vertically on the left
-    if i == 1 then
-        tab:SetPoint("TOPLEFT", tabContainer, "TOPLEFT", 5, -25)
-    else
-        tab:SetPoint("TOPLEFT", _G["MyAddonTab" .. (i-1)], "BOTTOMLEFT", 0, -tabSpacing)
-    end
+local function CreateTabs()
+    local tabs = {"To-dos", "Professions", "Raids", "Buffs", "Consumes", "Settings"}
 
-    -- Background for button (normal state)
-    local tabBg = tab:CreateTexture(nil, "BACKGROUND")
-    tabBg:SetAllPoints()
-    tabBg:SetColorTexture(0.3, 0.3, 0.3, 0.8)  -- Default dark gray background
-    tab.bg = tabBg
-
-    -- Highlight frame (hover & selection effect)
-    local highlight = tab:CreateTexture(nil, "HIGHLIGHT")
-    highlight:SetAllPoints()
-    highlight:SetColorTexture(0.5, 0.1, 0.1, 0.9)-- Dark red
-    tab:SetHighlightTexture(highlight)
-
-    -- Button label
-    local tabText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    tabText:SetPoint("CENTER")
-    tabText:SetText(tabName)
-    tab.text = tabText
-
-    tab:SetScript("OnClick", function()
-        selectedTab = i
-        for j, frame in ipairs(tabFrames) do
-            if frame then frame:Hide() end
-        end
-        if tabFrames[i] then
-            tabFrames[i]:Show()
-        end
+    for i, tabName in ipairs(tabs) do
+        local tab = CreateFrame("Button", "MyAddonTab" .. i, tabContainer)
+        tab:SetSize(tabWidth, tabHeight)
         
-        -- Update visual state of tabs
-        for j=1, #tabs do
-            local otherTab = _G["MyAddonTab" .. j]
-            if j == i then
-                otherTab.bg:SetColorTexture(0.8, 0.1, 0.1, 1) -- Selected tab (blue)
-                otherTab.text:SetTextColor(1, 1, 1) -- White text
-            else
-                otherTab.bg:SetColorTexture(0.2, 0.2, 0.2, 1) -- Default gray
-                otherTab.text:SetTextColor(0.8, 0.8, 0.8) -- Light gray text
-            end
+        if i == 1 then
+            tab:SetPoint("TOPLEFT", tabContainer, "TOPLEFT", 5, -25)
+        else
+            tab:SetPoint("TOPLEFT", _G["MyAddonTab" .. (i-1)], "BOTTOMLEFT", 0, -tabSpacing)
         end
-        
-        -- Trigger updates for specific tabs
-        if i == 2 then  -- Professions tab
-            UpdateProfessionCooldowns()
-        elseif i == 3 then  -- Raids tab
-            -- Add debug output for raid tab
-            local currentPhase = WoWCharacterManagerSettings and WoWCharacterManagerSettings.currentPhase or 3
-            print("CharacterManager: Raid tab clicked - Current Phase setting: " .. currentPhase)
-            
-            -- If raid frames don't exist, create them
-            if not raidFrames or #raidFrames == 0 then
-                print("CharacterManager: Raid frames not found, creating them now")
-                raidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
-                CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabFrames)
-            end
-            
-            CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(raidFrames)
-            
-            if raidFrames then
-                print("CharacterManager: Number of raid frames: " .. #raidFrames)
-                for _, raidData in ipairs(raidFrames) do
-                    if raidData.characters and raidData.characters:IsShown() then
-                        raidData.populate(raidData.raidName)
-                    end
-                end
-            else
-                print("CharacterManager: No raid frames found!")
-            end
-        elseif i == 4 then  -- Buffs tab
-            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
+
+        local tabBg = tab:CreateTexture(nil, "BACKGROUND")
+        tabBg:SetAllPoints()
+        tabBg:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+        tab.bg = tabBg
+
+        local highlight = tab:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(0.5, 0.1, 0.1, 0.9)
+        tab:SetHighlightTexture(highlight)
+
+        local tabText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tabText:SetPoint("CENTER")
+        tabText:SetText(tabName)
+        tab.text = tabText
+
+        tab:SetScript("OnClick", function()
+            SelectTab(i)
+        end)
+
+        if not tabFrames[i] then
+            tabFrames[i] = CreateFrame("Frame", nil, MyAddon)
+            tabFrames[i]:SetPoint("TOPLEFT", MyAddon, "TOPLEFT", 128 - (tabWidth + 8), -10)
+            tabFrames[i]:SetPoint("BOTTOMRIGHT", MyAddon, "BOTTOMRIGHT", -10, 10)
+            tabFrames[i]:Hide()
         end
-    end)
 
-    -- Create tab content frames
-    if not tabFrames[i] then
-        tabFrames[i] = CreateFrame("Frame", nil, MyAddon)
-        tabFrames[i]:SetPoint("TOPLEFT", MyAddon, "TOPLEFT", 128 - (tabWidth + 8), -10)  -- Shift left
-        tabFrames[i]:SetPoint("BOTTOMRIGHT", MyAddon, "BOTTOMRIGHT", -10, 10)
-        tabFrames[i]:Hide()
-    end
-
-    -- Set initial tab state
-    if i == selectedTab then
-        tab.bg:SetColorTexture(0.8, 0.1, 0.1, 1)  -- 
-        tab.text:SetTextColor(1, 1, 1) -- White text
-        tabFrames[i]:Show()
-    else
-        tab.bg:SetColorTexture(0.2, 0.2, 0.2, 1) -- Default gray
-        tab.text:SetTextColor(0.8, 0.8, 0.8) -- Light gray text
+        SetTabState(tab, i == selectedTab)
     end
 end
 
 
--- Keep the professionUpdateTimer
-local professionUpdateTimer = CreateFrame("Frame")
-professionUpdateTimer:SetScript("OnUpdate", function(self, elapsed)
-    self.elapsed = (self.elapsed or 0) + elapsed
-    if self.elapsed >= 30 then  -- Update every second
-        if selectedTab == 2 then
-            UpdateProfessionCooldowns()
+local function CreateUpdateTimer()
+    local updateTimer = CreateFrame("Frame")
+    updateTimer:SetScript("OnUpdate", function(self, elapsed)
+        self.elapsed = (self.elapsed or 0) + elapsed
+        if self.elapsed >= 30 then  -- Update every 30 seconds
+            UpdateUIBasedOnSelectedTab()
+            self.elapsed = 0
         end
-        self.elapsed = 0
-    end
-end)
--- Create raid frames using the module function
--- Initialize raid frames with current phase setting
+    end)
+end
 
 
 local function UpdateDisplay()
@@ -499,26 +472,11 @@ local function UpdateDisplay()
     end
 end
 
-local updateTimer = CreateFrame("Frame")
-updateTimer:SetScript("OnUpdate", function(self, elapsed)
-    self.elapsed = (self.elapsed or 0) + elapsed
-    if self.elapsed >= 60 then  -- Update every minute
-        if selectedTab == 3 then
-            for _, raidData in ipairs(raidFrames) do
-                if raidData.characters:IsShown() then
-                    raidData.populate(raidData.raidName)
-                end
-            end
-        elseif selectedTab == 4 then
-            CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, WoWCharacterManagerSettings)
-        end
-        self.elapsed = 0
-    end
-end)
 
-if CharacterManager_Settings and CharacterManager_Settings.CreateSettingsTabContent then
-    CharacterManager_Settings.CreateSettingsTabContent(tabFrames)
-end
+CreateTabs()
+CreateUpdateTimer()
+
+
 
 -- Set up the initial tab
 if _G["MyAddonTab" .. selectedTab] then

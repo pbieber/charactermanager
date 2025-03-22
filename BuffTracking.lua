@@ -169,7 +169,16 @@ end
 
 -- Update buff display in the UI
 function CharacterManager_BuffTracking.UpdateBuffDisplay(tabFrames, MyAddonDB, MyAddonSettings)
+    if not tabFrames then
+        print("Error: tabFrames is nil in UpdateBuffDisplay")
+        return
+    end
+
     local buffFrame = tabFrames[4]
+    if not buffFrame then
+        print("Error: buffFrame (tabFrames[4]) is nil in UpdateBuffDisplay")
+        return
+    end
 
     -- Clear old UI elements
     for _, frame in ipairs(buffFrames) do

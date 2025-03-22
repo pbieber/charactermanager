@@ -98,6 +98,22 @@ function CharacterManager_RaidLockouts.FormatTime(seconds)
 end
 -- Add this function to RaidLockouts.lua
 
+function CharacterManager_RaidLockouts.RemoveAllRaidFrames()
+    if _G.raidFrames then
+        for _, raidData in ipairs(_G.raidFrames) do
+            if raidData.frame then
+                raidData.frame:Hide()
+                raidData.frame:SetParent(nil)
+            end
+            if raidData.characters then
+                raidData.characters:Hide()
+                raidData.characters:SetParent(nil)
+            end
+        end
+        table.wipe(_G.raidFrames)
+    end
+end
+
 function CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
     local raidFrames = {}
     currentPhase = currentPhase or 6
@@ -416,41 +432,51 @@ function CharacterManager_RaidLockouts.UpdateRaidFramesPosition(raidFrames, tabF
     end
 end
 
-function CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings)
+function CharacterManager_RaidLockouts.RecreateRaidFrames(tabFrames, MyAddonSettings, isRaidTabSelected)
     -- Get current phase from settings
     local currentPhase = MyAddonSettings and MyAddonSettings.currentPhase or 6
     print("CharacterManager: Recreating raid frames for Phase " .. currentPhase)
     
-    -- First, hide all existing frames in the tab
-    for _, child in pairs({tabFrames[3]:GetChildren()}) do
-        if child:GetName() ~= tabFrames[3]:GetName() then
+    -- Remove all existing raid frames
+    CharacterManager_RaidLockouts.RemoveAllRaidFrames()
+
+    -- Clear all children of the raid tab frame
+    local raidTabFrame = tabFrames[3]
+    for _, child in pairs({raidTabFrame:GetChildren()}) do
+        if child ~= raidTabFrame then
             child:Hide()
+            child:SetParent(nil)
         end
     end
-    
-    -- Clear existing raid frames if any
-    if _G.raidFrames then
-        for _, raidData in ipairs(_G.raidFrames) do
-            if raidData.frame then
-                raidData.frame:Hide()
-                raidData.frame:SetParent(nil)
-            end
-            if raidData.characters then
-                raidData.characters:Hide()
-                raidData.characters:SetParent(nil)
-            end
-        end
-        -- Clear the table
-        table.wipe(_G.raidFrames)
-    end
-    
+
     -- Create new raid frames based on current phase
     local newRaidFrames = CharacterManager_RaidLockouts.CreateRaidFrames(tabFrames, raids, raidDisplayNames, currentPhase)
-    CharacterManager_RaidLockouts.UpdateRaidFramesPosition(newRaidFrames, tabFrames)
-    CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(newRaidFrames)
+    
+    -- Ensure all new frames are properly parented and positioned
+    for _, raidData in ipairs(newRaidFrames) do
+        if raidData.frame then
+            raidData.frame:SetParent(raidTabFrame)
+            raidData.frame:SetShown(isRaidTabSelected) -- Only show if raid tab is selected
+        end
+        if raidData.characters then
+            raidData.characters:SetParent(raidTabFrame)
+            raidData.characters:Hide() -- Always hide character frames initially
+        end
+    end
+
+    if isRaidTabSelected then
+        CharacterManager_RaidLockouts.UpdateRaidFramesPosition(newRaidFrames, tabFrames)
+        CharacterManager_RaidLockouts.UpdateAllRaidStatusOverviews(newRaidFrames)
+    end
     
     -- Update the global reference
     _G.raidFrames = newRaidFrames
+    
+    -- Force a redraw of the raid tab if it's selected
+    if isRaidTabSelected then
+        raidTabFrame:Hide()
+        raidTabFrame:Show()
+    end
     
     return newRaidFrames
 end
